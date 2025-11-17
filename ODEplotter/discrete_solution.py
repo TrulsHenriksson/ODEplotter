@@ -1,0 +1,229 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from itertools import pairwise
+from numba import jit
+
+from typing import overload, Literal, Generator, Sequence
+from .utils.types import *
+
+
+# Adding the type signatures below makes it compile at import time. 
+# TODO: decide if this is desirable.
+# @jit([
+#     "float64[:, :](float64[:], float64[:], float64[:, :])",
+#     "complex128[:, :](float64[:], float64[:], complex128[:, :])",
+# ])
+@jit
+def interp_2d(x: TimeArray, xp: TimeArray, fp: VectorArray) -> VectorArray:
+    """Interpolate like np.interp, but with 2-dimensional fp."""
+    # Using x, xp, fp, just like in np.interp
+    if x.size == 0:
+        return np.empty((0, 0), dtype=fp.dtype) 
+    x_indices = np.searchsorted(xp, x)
+    after = np.minimum(x_indices, len(xp) - 1)
+    before = np.maximum(after - 1, 0)
+    numerators = x - xp[before]
+    denominators = xp[after] - xp[before]
+    denominators[denominators == 0.0] = 1.0  # Set to 1 to not divide by zero
+    fractions = numerators / denominators
+    fractions = fractions[:, None]  # Increase dimension
+    interpolated_fp = (1 - fractions) * fp[before] + fractions * fp[after]
+    return interpolated_fp  # type: ignore
+
+
+class DiscreteSolution:
+    point_gen: Generator[SolutionPoint]
+    ts: list[Time]
+    ys: list[Vector]
+    t0: Time
+    y0: Vector
+    dimension: int
+
+    def __init__(self, point_gen: Generator[SolutionPoint], method_name: str):
+        """Create a lazy discrete solution from a `SolutionPoint` generator.
+
+        A true solution to an initial value problem is a vector function `y(t)` where 
+        `y(t0) == y0`. This is approximated here by a linear interpolation between
+        discrete points `(t, y)` given by `point_gen`.
+
+        A DiscreteSolution stores solved values, but only solves for them when they are needed
+        (e.g. in `.plot()`) or it is explicitly asked to (using `.load()`, `.load_until()`).
+        
+        Arguments
+        ---------
+        point_gen : generator -> (Time, Vector)
+            Infinite iterator that returns (Time, Vector) pairs.
+        """
+        self.point_gen = point_gen
+        self.method_name = method_name
+        # Lists! Only converted to numpy arrays when needed since those are immutable.
+        self.ts: list[Time] = []
+        self.ys: list[Vector] = []
+        # Load the first point and save it
+        self.load()
+        self.t0 = self.ts[0]
+        self.y0 = self.ys[0]
+        self.dimension: int = len(self.y0)
+
+    def __repr__(self) -> str:
+        return f'<DiscreteSolution from {self.method_name} with t0={self.t0}, y0={self.y0}>'
+
+    def load(self, num: int = 1):
+        """Load (numerically solve for) `num` more points."""
+        if num <= 0: 
+            return
+        # Load num t, y values from point_gen and return True if it succeeded
+        new_points = [next(self.point_gen) for i in range(num)]
+        new_ts, new_ys = zip(*new_points)
+        self.ts.extend(new_ts)
+        self.ys.extend(new_ys)
+
+    def load_until(self, t: Time):
+        """Load (numerically solve for) points until the time `t` is reached."""
+        if t == np.inf:
+            raise ValueError('Cannot load until infinity')
+        new_t = self.ts[-1]
+        # TODO: Figure out how to make this more efficient. (It feels like it should be possible)
+        while new_t < t:
+            new_t, new_y = next(self.point_gen)
+            self.ts.append(new_t)
+            self.ys.append(new_y)
+
+    @overload
+    def __call__(self, t: Time, *, load: bool = True) -> Vector:
+        ...
+    @overload
+    def __call__(self, t: Sequence[Time] | TimeArray, *, load: bool = True) -> VectorArray:
+        ...
+    def __call__(self, t: Time | Sequence[Time] | TimeArray, *, load: bool = True) -> Vector | VectorArray:
+        """Return the `y` value(s) from interpolating between the solution points.
+        
+        Arguments
+        ---------
+        t : Time or Sequence[Time] or TimeArray
+            The time(s) to evaluate the linear interpolation at.
+        
+        Returns
+        -------
+        y(s) : Vector or VectorArray
+            The interpolated `y` value(s). Returns a single `Vector` for single `Time` inputs, and
+            a `VectorArray` for a sequence of `Time` inputs.
+        """
+        x = to_time_array(t)
+        if load:
+            self.load_until(x[-1])
+        xp = np.array(self.ts)
+        fp = np.array(self.ys)
+        result = interp_2d(x, xp, fp)
+        if is_time(t):
+            return result[0]
+        return result
+
+    def get_arrays(self, 
+        start_index: int | None = None, 
+        end_index: int | None = None, 
+        load: bool = True
+    ) -> tuple[TimeArray, VectorArray]:
+        if start_index is None and end_index is None:
+            return to_time_array(self.ts), to_vector_array(self.ys, self.dimension)
+        if load and end_index is not None:
+            self.load(end_index - len(self.ts))
+        return to_time_array(self.ts[start_index:end_index]), to_vector_array(self.ys[start_index:end_index], self.dimension)
+
+    @overload
+    def __getitem__(self, idx: int) -> tuple[Time, Vector]:
+        ...
+    @overload
+    def __getitem__(self, idx: slice) -> tuple[TimeArray, VectorArray]:
+        ...
+    def __getitem__(self, idx: int | slice):
+        if isinstance(idx, int):
+            self.load(idx - len(self.ts))
+            return self.ts[idx], self.ys[idx]
+        elif isinstance(idx, slice):
+            return to_time_array(self.ts[idx]), to_vector_array(self.ys[idx], self.dimension)
+        else:
+            raise TypeError(f'DiscreteSolution indices must be integers or slices, not {type(idx).__name__}')
+
+    def get_arrays_between(
+        self,
+        t_intervals: Sequence[Time] | TimeArray,
+        closed_side: Literal["left", "right"] = "left",
+        *,
+        load: bool = True,
+    ) -> tuple[list[TimeArray], list[VectorArray]]:
+        """Get the (ts, ys) arrays between each pair of consecutive t_values."""
+        if load:
+            self.load_until(t_intervals[-1])
+        ts_array = to_time_array(self.ts)
+        ys_array = to_vector_array(self.ys, self.dimension)
+        indices = np.searchsorted(ts_array, to_time_array(t_intervals), side=closed_side)
+        return (
+            [ts_array[before:after] for before, after in pairwise(indices)],
+            [ys_array[before:after] for before, after in pairwise(indices)],
+        )
+
+    def plot(
+        self,
+        t_start: Time,
+        t_end: Time,
+        xcoord: int = -1,
+        ycoord: int = 0,
+        *,
+        ax: Axes | None = None,
+        style: str = "-",
+        load: bool = True,
+        xygetter: XYGetter | None = None,
+        **plot_kwargs,
+    ) -> Line2D:
+        """Plot two coordinates of the discrete solution.
+
+        Plot y[xcoord] on the x-axis (or t if xcoord = -1) and y[ycoord] on the y-axis
+        (or t if ycoord = -1) for all y-values.
+        """
+        t_start, t_end = to_time(t_start), to_time(t_end)
+        if not isinstance(xcoord, int):
+            raise TypeError(f"xcoord must be int, not {type(xcoord).__name__}")
+        if not isinstance(ycoord, int):
+            raise TypeError(f"ycoord must be int, not {type(ycoord).__name__}")
+        if not -1 <= xcoord < self.dimension or not -1 <= ycoord < self.dimension:
+            raise ValueError(f"Both xcoord and ycoord must be between -1 and {self.dimension - 1} (inclusive)")
+
+        if ax is None:
+            ax = plt.gca()
+        (ts,), (ys,) = self.get_arrays_between([t_start, t_end], load=load)
+        if xygetter is None:
+            point_array = np.column_stack((ys, ts))  # Place ts at the last position
+            xaxis = point_array[:, xcoord]
+            yaxis = point_array[:, ycoord]
+        else:
+            xaxis, yaxis = xygetter(ts, ys)
+        return ax.plot(xaxis, yaxis, style, **plot_kwargs)[0]
+
+    def plot_3d(
+        self,
+        t_start: Time,
+        t_end: Time,
+        xyzgetter: XYZGetter,
+        *,
+        ax: Axes3D,
+        style: str = "-",
+        load: bool = True,
+        **plot_kwargs,
+    ) -> Line3D:
+        """Plot three coordinates of the discrete solution, as gotten from xyzgetter."""
+        t_start, t_end = to_time(t_start), to_time(t_end)
+        (ts,), (ys,) = self.get_arrays_between([t_start, t_end], load=load)
+        xaxis, yaxis, zaxis = xyzgetter(ts, ys)
+        return ax.plot(xaxis, yaxis, zaxis, style, **plot_kwargs)[0]  # type: ignore (matplotlib gets it wrong)
+
+    def plot_time_steps(self, *, ax: Axes | None = None, style: str = '-', **plot_kwargs) -> Line2D:
+        """Plot the lengths of the time steps taken over time.
+        
+        Only useful for adaptive-step solutions.
+        """
+        if ax is None:
+            ax = plt.gca()
+        xaxis = self.ts[:-1]
+        yaxis = np.diff(to_time_array(self.ts))
+        return ax.semilogy(xaxis, yaxis, style, **plot_kwargs)[0]
