@@ -40,7 +40,7 @@ def runge_kutta_43(
             half_h = 0.5 * h
             derivatives[1] = derivative(t + half_h, y + half_h * derivatives[0])
             derivatives[2] = derivative(t + half_h, y + half_h * derivatives[1])
-            derivatives[3] = derivative(t + h, y - derivatives[0] + 2 * derivatives[1])
+            derivatives[3] = derivative(t + h, y + h * (-derivatives[0] + 2 * derivatives[1]))
             derivatives[4] = derivative(t + h, y + h * derivatives[2])
 
             error_vector = (derivatives[1] - derivatives[2]) / 3 + (derivatives[3] - derivatives[4]) / 6
