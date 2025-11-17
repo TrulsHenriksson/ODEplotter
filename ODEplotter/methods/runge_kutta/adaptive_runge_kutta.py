@@ -126,7 +126,7 @@ class AdaptiveRungeKutta(RungeKutta):
             derivative,
             t0,
             y0,
-            to_time(h0),
+            h0,
             tol,
             min_h,
             self.stages,

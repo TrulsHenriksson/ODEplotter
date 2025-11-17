@@ -73,4 +73,4 @@ class BackwardDifferentialFormula(SolutionMethod):
         self.validated = True
 
     def _prepare_arguments(self, derivative: DerivativeFunction, t0: Time, y0: Vector, h: Time, use_jit: bool):
-        return (derivative, t0, y0, to_time(h), self.y_weights, self.derivative_weight, self.corrector, deficit_getter)
+        return (derivative, t0, y0, h, self.y_weights, self.derivative_weight, self.corrector, deficit_getter)

@@ -33,7 +33,7 @@ class ODE:
         self.derivative = derivative
         self.obstacles = obstacles
 
-    def solve(self, t0: Time, y0: Vector, method_name: str, h: Time, *, use_jit: bool = False, **kwargs) -> DiscreteSolution:
+    def solve(self, t0: Time, y0: Vector, method_name: str, *args, use_jit: bool = False, **kwargs) -> DiscreteSolution:
         """Lazily solves the given IVP using a given method and step size.
 
         The Initial Value Problem is defined by the ODE itself, the initial time `t0`, and the
@@ -48,15 +48,21 @@ class ODE:
             Initial value vector.
         method_name : str
             Any method name in ``ODEplotter.METHODS``.
-        h : Time (usually < 0.1)
-            Step size. When using an adaptive-step method, this is the initial step size.
         use_jit : bool (default: False)
             Whether to Just-In-Time compile the derivative and solution methods. This takes
             extra time the first time `ODE.solve` is called, but speeds up subsequent calls
             significantly. Currently unavailable for implicit methods.
+        
+        **Arguments specific to fixed-step methods:**
+
+        h : Time (usually < 0.1)
+            Step size. This is constant during integration.
 
         **Arguments specific to adaptive-step methods:**
 
+        h0 : Time (usually < 0.1)
+            Initial step size. This is changed during integration, and is less impactful
+            than `tol` (see below).
         tol : float (usually < 1e-3)
             Error tolerance. The method keeps the local error estimate below this bound.
         min_h : float (default: 1e-15)
@@ -69,17 +75,26 @@ class ODE:
             DiscreteSolution instance with methods to load points (solve), interpolate between them,
             and plot the solution.
         """
-        t0, y0, h = to_time(t0), to_vector(y0), to_time(h)
-        restarter = self.__get_restarter(method_name, h, use_jit=use_jit, **kwargs)
+        t0, y0 = to_time(t0), to_vector(y0)
+        # Get h / h0 primarily from kwargs, then args
+        if "h" in kwargs:
+            kwargs["h"] = to_time(kwargs["h"])
+        elif "h0" in kwargs:
+            kwargs["h0"] = to_time(kwargs["h0"])
+        else:
+            h, *args = args
+            args = (to_time(h), *args)
+
+        restarter = self.__get_restarter(method_name, *args, use_jit=use_jit, **kwargs)
         if self.obstacles:
             point_gen = self.__obstacle_solver(restarter, t0, y0)
         else:
             point_gen = restarter(t0, y0)
         return DiscreteSolution(point_gen, method_name)
 
-    def __get_restarter(self, method_name: str, h: Time, *, use_jit: bool = False, **kwargs):
+    def __get_restarter(self, method_name: str, *args, use_jit: bool = False, **kwargs):
         method = METHODS[method_name.lower()]
-        restarter = lambda new_t0, new_y0: method.solve(self.derivative, new_t0, new_y0, h, use_jit=use_jit, **kwargs)
+        restarter = lambda new_t0, new_y0: method.solve(self.derivative, new_t0, new_y0, *args, use_jit=use_jit, **kwargs)
         return restarter
 
     def solve_single(self, t0: Time, y0: Vector, method_name: str, h: Time, **kwargs) -> SolutionPoint:

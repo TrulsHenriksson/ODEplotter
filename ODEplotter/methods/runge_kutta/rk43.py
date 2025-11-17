@@ -78,7 +78,7 @@ class RungeKutta43(AdaptiveRungeKuttaPI):
             derivative,
             t0,
             y0,
-            to_time(h0),
+            h0,
             tol,
             min_h,
             self.jit_norms[norm] if use_jit else self.norms[norm],

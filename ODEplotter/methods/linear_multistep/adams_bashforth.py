@@ -49,4 +49,4 @@ class AdamsBashforth(SolutionMethod):
         # Start with the previous derivatives all equal to the initial derivative
         # This is seemingly impossible to do inside a JITed function, that's why we do it here
         derivatives = np.array([derivative(t0, y0)] * len(self.weights))
-        return (derivative, t0, y0, to_time(h), self.weights, derivatives)
+        return (derivative, t0, y0, h, self.weights, derivatives)

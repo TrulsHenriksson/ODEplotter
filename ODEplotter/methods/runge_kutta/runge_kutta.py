@@ -81,4 +81,4 @@ class RungeKutta(SolutionMethod):
         return matrix
 
     def _prepare_arguments(self, derivative: DerivativeFunction, t0: Time, y0: Vector, h: Time, use_jit: bool):
-        return (derivative, t0, y0, to_time(h), self.stages, self.nodes, self.weights, self.matrix)
+        return (derivative, t0, y0, h, self.stages, self.nodes, self.weights, self.matrix)
