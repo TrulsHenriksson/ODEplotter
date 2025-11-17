@@ -38,5 +38,5 @@ class RungeKutta4(SolutionMethod):
     def _validate(self):
         pass
 
-    def _prepare_arguments(self, derivative: DerivativeFunction, t: Time, y: Vector, h: Time, use_jit: bool):
-        return (derivative, t, y, h)
+    def _prepare_arguments(self, derivative: DerivativeFunction, t0: Time, y0: Vector, h: Time, use_jit: bool):
+        return (derivative, t0, y0, h)

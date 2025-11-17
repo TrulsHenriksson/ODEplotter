@@ -10,6 +10,7 @@ from .runge_kutta.rk4 import RungeKutta4
 from .runge_kutta.runge_kutta import RungeKutta
 from .runge_kutta.adaptive_runge_kutta import AdaptiveRungeKutta
 from .runge_kutta.adaptive_runge_kutta_PI import AdaptiveRungeKuttaPI
+from .runge_kutta.rk43 import RungeKutta43
 
 
 __all__ = ["METHODS"]
@@ -56,7 +57,7 @@ RK12 = RungeKutta(RKFEAGIN12_NODES, RKFEAGIN12_WEIGHTS, RKFEAGIN12_MATRIX)
 # TODO: Check that these orders are accurate
 HEUN_EULER = AdaptiveRungeKutta(HEUN_EULER_NODES, HEUN_EULER_WEIGHTS, HEUN_EULER_MATRIX, HEUN_EULER_ERROR, order=2)
 BOGACKI_SHAMPINE = AdaptiveRungeKutta(BOGACKI_SHAMPINE_NODES, BOGACKI_SHAMPINE_WEIGHTS, BOGACKI_SHAMPINE_MATRIX, BOGACKI_SHAMPINE_ERROR, order=3)
-RK43 = AdaptiveRungeKuttaPI(RK43_NODES, RK43_WEIGHTS, RK43_MATRIX, RK43_ERROR, order=4)
+RK43 = RungeKutta43()
 RKF = AdaptiveRungeKutta(RKF_NODES, RKF_WEIGHTS, RKF_MATRIX, RKF_ERROR, order=4)
 RK45 = AdaptiveRungeKutta(RK45_NODES, RK45_WEIGHTS, RK45_MATRIX, RK45_ERROR, order=5)
 RKCK = AdaptiveRungeKutta(RKCK_NODES, RKCK_WEIGHTS, RKCK_MATRIX, RKCK_ERROR, order=5)
