@@ -33,10 +33,12 @@ class RungeKutta4(SolutionMethod):
     compiled_method = staticmethod(jit(runge_kutta_4))
 
     def __init__(self):
+        # No parameters, since it is hard-coded
         super().__init__()
     
     def _validate(self):
-        pass
+        # Nothing to validate, since it is hard-coded
+        self.validated = True
 
     def _prepare_arguments(self, derivative: DerivativeFunction, t0: Time, y0: Vector, h: Time, use_jit: bool):
         return (derivative, t0, y0, h)

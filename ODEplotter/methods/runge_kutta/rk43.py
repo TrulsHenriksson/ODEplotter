@@ -29,6 +29,9 @@ def runge_kutta_43(
     error_exponent = 2 / 12
     last_error_exponent = -1 / 12
 
+    weights = np.array([1.0, 2.0, 2.0, 0.0, 1.0]) / 6
+    error_weights = np.array([0.0, 2.0, -2.0, 1.0, -1.0]) / 6
+
     while True:
         yield t, y.copy()
         derivatives[0] = derivative(t, y)
@@ -43,7 +46,7 @@ def runge_kutta_43(
             derivatives[3] = derivative(t + h, y + h * (-derivatives[0] + 2 * derivatives[1]))
             derivatives[4] = derivative(t + h, y + h * derivatives[2])
 
-            error_vector = (derivatives[1] - derivatives[2]) / 3 + (derivatives[3] - derivatives[4]) / 6
+            error_vector = error_weights.dot(derivatives)
             error = max(h * norm(error_vector), MACHINE_EPS)
             # Update the step size (0.9 as a safety factor)
             h *= min(max(0.9 * (tol / error)**error_exponent * (tol / last_error)**last_error_exponent, 0.3), 2)
@@ -53,7 +56,7 @@ def runge_kutta_43(
                 raise StepSizeTooSmallError(f"Adaptive time step got too small (<{min_h}) at t = {t}")
 
         t += h
-        y += h * ((derivatives[0] + derivatives[4]) / 6 + (derivatives[1] + derivatives[2]) / 3)
+        y += h * weights.dot(derivatives)
 
 
 class RungeKutta43(AdaptiveRungeKuttaPI):
