@@ -1,5 +1,3 @@
-import numpy as np
-
 from typing import Generator, Callable
 from ...utils.types import *
 
