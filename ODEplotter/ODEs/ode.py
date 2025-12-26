@@ -105,28 +105,33 @@ class ODE:
     def __obstacle_solver(
         self, restarter: Callable[[Time, Vector], Generator[SolutionPoint]], t0: Time, y0: Vector
     ) -> Generator[SolutionPoint]:
-        # TODO: Simplify the flow
         new_t0, new_y0 = t0, y0
+        
         # Keep restarting point_gen when the simulation hits an obstacle
         restart = True
         while restart:
-            # Restart the solution after hitting an obstacle
+            # (Re)start the solution (since we just hit an obstacle)
             point_gen = restarter(new_t0, new_y0)
             # Load the very first point
             prev_t, prev_y = next(point_gen)
             yield prev_t, prev_y
+
             for t, y in point_gen:
-                # Handle collisions
+                # See if any obstacle was hit, restart if so
                 candidates = [obstacle.was_hit(prev_t, prev_y, t, y) for obstacle in self.obstacles]
                 restart = any(candidates)
-                if restart:
-                    # [(obstacle, t_hit, y_hit), ...]
-                    collisions = [
+
+                if not restart:
+                    # No obstacles were hit, proceed as usual
+                    yield t, y
+                    prev_t, prev_y = t, y
+                else:
+                    collisions: list[tuple[Obstacle, Time, Vector]] = [
                         (obstacle, *obstacle.get_collision(prev_t, prev_y, t, y))
                         for obstacle, was_hit in zip(self.obstacles, candidates)
                         if was_hit
                     ]
-                    # Take the first point that was hit (there might be multiple)
+                    # Take the first obstacle that was hit (there might be multiple)
                     hit_obstacle, t_hit, y_hit = min(collisions, key=lambda c: c[1])
                     new_t0 = t_hit
                     try:
@@ -135,9 +140,9 @@ class ODE:
                         restart = False
                     # Break to restart the point_gen
                     break
-                # No obstacles were hit, proceed without restarting point_gen
-                yield t, y
-                prev_t, prev_y = t, y
+            else:
+                # point_gen ran out of values to generate
+                raise StopIteration
 
     def draw_vector_field(
         self, t: Time, origin: Vector, xcoord=-1, ycoord=0, *, ax: Axes | None = None, density: int = 15, scale: float = 1.0
