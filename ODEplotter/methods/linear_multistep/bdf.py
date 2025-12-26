@@ -15,35 +15,27 @@ def backward_differential_formula(
     y_weights: WeightArray,
     derivative_weight: float,
     corrector: Callable[[Callable[[Vector], Vector], Vector], Vector],
-    deficit_getter,
 ) -> Generator[SolutionPoint]:
     # Start by assuming that the previous y values came from a constant derivative
     first_derivative = derivative(t, y)
     previous_ys = to_vector_array(y - h * first_derivative * np.arange(len(y_weights))[:, None])
     while True:
         yield t, y.copy()
-        # Calculate the next y value by solving for deficit == 0
-        deficit = deficit_getter(derivative, t, previous_ys, h, y_weights, derivative_weight)
+
+        # Next t
         t += h
+
+        # Next y
+        previous_ys_average = y_weights.dot(previous_ys)
+        def deficit(next_y: Vector) -> Vector:
+            return next_y - (previous_ys_average + derivative_weight * h * derivative(t, next_y))
+
+        # Calculate the next y value by solving for deficit == 0
         y = corrector(deficit, y)
+
         # Add the new y and move the rest backward one step
         previous_ys[1:] = previous_ys[:-1]
         previous_ys[0] = y
-
-
-def deficit_getter(
-    derivative: DerivativeFunction,
-    t: Time,
-    previous_ys: VectorArray,
-    h: Time,
-    y_weights: WeightArray,
-    derivative_weight: float,
-) -> Callable[[Vector], Vector]:
-    next_t = t + h
-    previous_ys_average = y_weights.dot(previous_ys)
-    def deficit(next_y: Vector) -> Vector:
-        return next_y - (previous_ys_average + derivative_weight * h * derivative(next_t, next_y))
-    return deficit
 
 
 class BackwardDifferentialFormula(SolutionMethod):
@@ -72,4 +64,4 @@ class BackwardDifferentialFormula(SolutionMethod):
         self.validated = True
 
     def _prepare_arguments(self, derivative: DerivativeFunction, t0: Time, y0: Vector, h: Time, use_jit: bool):
-        return (derivative, t0, y0, h, self.y_weights, self.derivative_weight, self.corrector, deficit_getter)
+        return (derivative, t0, y0, h, self.y_weights, self.derivative_weight, self.corrector)

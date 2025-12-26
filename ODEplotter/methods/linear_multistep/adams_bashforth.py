@@ -19,6 +19,7 @@ def adams_bashforth(
         yield t, y.copy()
         t += h
         y += h * weights.dot(derivatives)
+
         # Move the old diffs back one step and calculate the new one
         derivatives[1:] = derivatives[:-1]
         derivatives[0] = derivative(t, y)

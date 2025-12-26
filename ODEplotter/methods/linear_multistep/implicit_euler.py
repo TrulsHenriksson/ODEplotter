@@ -15,12 +15,14 @@ def implicit_eulers_method(
     while True:
         yield t, y.copy()
         last_derivative = derivative(t, y)
+        # Next t
+        t += h
+        
         # Predict next y value using Euler's method (AB1)
-        next_t = t + h
         next_y_guess = y + h * last_derivative
+        
         # Find the next y value that makes the deficit function zero
-        deficit = lambda next_y: next_y - y - h * derivative(next_t, next_y)
-        t = next_t
+        deficit = lambda next_y: next_y - y - h * derivative(t, next_y)
         y = corrector(deficit, next_y_guess)
 
 

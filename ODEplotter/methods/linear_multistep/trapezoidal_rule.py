@@ -15,12 +15,15 @@ def trapezoidal_rule(
     while True:
         yield t, y.copy()
         last_derivative = derivative(t, y)
+        
+        # Next t
+        t += h
+        
         # Predict next y value using Euler's method
-        next_t = t + h
         next_y_guess = y + h * last_derivative
+        
         # Find the next y value that makes the deficit function zero
-        deficit = lambda next_y: next_y - y - 0.5 * h * (last_derivative + derivative(next_t, next_y))
-        t = next_t
+        deficit = lambda next_y: next_y - y - 0.5 * h * (last_derivative + derivative(t, next_y))
         y = corrector(deficit, next_y_guess)
 
 

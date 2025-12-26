@@ -17,34 +17,29 @@ def adams_moulton(
     weights: WeightArray,
     predictor: Callable[[Time, Vector, VectorArray], Vector],
     corrector: Callable[[Callable[[Vector], Vector], Vector], Vector],
-    deficit_getter,
 ) -> Generator[SolutionPoint]:
+    first_weight = weights[0]
     # Start with the previous diffs all equal to the initial diff
     derivatives = np.array([derivative(t, y)] * len(weights))
     while True:
         yield t, y.copy()
-        # Guess next y value
-        next_y_guess = predictor(h, y, derivatives)
-        deficit = deficit_getter(derivative, t, y, h, weights, derivatives)
+
+        # Next t
+        t += h
+
+        # Next y
+        prev_derivatives_average = weights[1:].dot(derivatives[:-1])
+        def deficit(next_y: Vector) -> Vector:
+            first_derivative = derivative(t, next_y)
+            return next_y - y - h * (first_weight * first_derivative + prev_derivatives_average)
+
         # Find the next y value that makes the deficit function zero
-        t = t + h
+        next_y_guess = predictor(h, y, derivatives)
         y = corrector(deficit, next_y_guess)
+
         # Move the old diffs back one step and calculate the new one
         derivatives[1:] = derivatives[:-1]
         derivatives[0] = derivative(t, y)
-
-
-def deficit_getter(
-    derivative: DerivativeFunction, t: Time, y: Vector, h: Time, weights: WeightArray, derivatives: VectorArray
-) -> Callable[[Vector], Vector]:
-    # Average the previous derivatives (derivatives[0] == derivative(t, y) so use the latter weights)
-    prev_derivatives_average = weights[1:].dot(derivatives[:-1])
-    first_weight = weights[0]
-    next_t = t + h
-    def deficit(next_y: Vector) -> Vector:
-        first_derivative = derivative(next_t, next_y)
-        return next_y - y - h * (first_weight * first_derivative + prev_derivatives_average)
-    return deficit
 
 
 class AdamsMoulton(SolutionMethod):
@@ -74,4 +69,4 @@ class AdamsMoulton(SolutionMethod):
         self.validated = True
 
     def _prepare_arguments(self, derivative: DerivativeFunction, t0: Time, y0: Vector, h: Time, use_jit: bool):
-        return (derivative, t0, y0, h, self.weights, self.predictor, self.corrector, deficit_getter)
+        return (derivative, t0, y0, h, self.weights, self.predictor, self.corrector)
