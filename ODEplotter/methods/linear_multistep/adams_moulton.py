@@ -2,10 +2,10 @@ import numpy as np
 
 from typing import Callable, Generator
 from ...utils.types import *
+from ...utils.predictors import Predictors
+from ...utils.root_finder import RootFinder
 
 from ..solution_method import SolutionMethod
-from ...predictors import Predictors
-from ...root_finder import RootFinder
 
 
 # Non-JIT compilable method (TODO: fix by using a JITed predictor-corrector pair)

@@ -1,16 +1,18 @@
 import numpy as np
 
 from typing import overload
-from .utils.types import Vector, Time, is_time, is_vector
+from .types import Vector, Time, is_time, is_vector
+
+from math import ulp
 
 
-MACHINE_EPS = 7/3 - 4/3 - 1 # Machine epsilon (float hack) 
+MACHINE_EPS = ulp(1.0)
 
 
 # Class for finding roots of functions. Works for both one-dimensional and
 # multidimensional functions.
 class RootFinder:
-    newton_eps = float(np.sqrt(MACHINE_EPS)) # Determined to be at least close to optimal
+    newton_eps = MACHINE_EPS ** 0.5 # Determined to be at least close to optimal
     method_iterations = {'newton': 5, 'fixedpoint': 10}
 
     # Fixed-point method of finding roots. Works for both 1-dim and multidim functions.

@@ -1,8 +1,8 @@
 from typing import Generator, Callable
 from ...utils.types import *
+from ...utils.root_finder import RootFinder
 
 from ..solution_method import SolutionMethod
-from ...root_finder import RootFinder
 
 
 def trapezoidal_rule(

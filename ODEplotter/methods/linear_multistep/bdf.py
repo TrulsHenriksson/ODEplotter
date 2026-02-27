@@ -2,9 +2,9 @@ import numpy as np
 
 from typing import Callable, Generator
 from ...utils.types import *
+from ...utils.root_finder import RootFinder
 
 from ..solution_method import SolutionMethod
-from ...root_finder import RootFinder
 
 
 def backward_differential_formula(

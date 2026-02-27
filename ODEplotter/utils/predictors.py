@@ -1,7 +1,7 @@
 import numpy as np
 
 from typing import Callable
-from .utils.types import Time, Vector, VectorArray, WeightArray
+from .types import Time, Vector, VectorArray, WeightArray
 
 
 type PredictorMethod = Callable[[Time, Vector, VectorArray], Vector]
