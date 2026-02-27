@@ -1,11 +1,11 @@
 import numpy as np
 from functools import wraps
 
-from .root_finder import RootFinder
-
 from typing import overload, Callable
 from .utils.types import *
 from .utils.exceptions import ObstacleStopSolving
+
+from .utils.root_finder import RootFinder
 
 
 def sign(x) -> int:
