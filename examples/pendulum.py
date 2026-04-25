@@ -24,11 +24,11 @@ def lines_updater(pendulum_line, trail_line, trail_length=0):
         old_trail_xdata, old_trail_ydata = trail_line.get_data()
         trail_line.set_xdata(np.concatenate((old_trail_xdata, np.sin(angles) * PENDULUM_LENGTH))[-trail_length:])
         trail_line.set_ydata(np.concatenate((old_trail_ydata, -np.cos(angles) * PENDULUM_LENGTH))[-trail_length:])
-        return pendulum_line, trail_line        
+        return pendulum_line, trail_line
     return update_lines
 
 def lines_resetter(pendulum_line, trail_line):
-    def reset_lines():
+    def reset_lines(t_start):
         pendulum_line.set_xdata([])
         pendulum_line.set_ydata([])
         trail_line.set_xdata(np.array([]))

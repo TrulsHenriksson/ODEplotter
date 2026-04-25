@@ -20,7 +20,6 @@ __all__ = ["METHODS"]
 # Explicit linear multistep methods
 
 EULER = EulersMethod()
-IMPLICIT_EULER = ImplicitEulersMethod()
 
 AB1 = AdamsBashforth([1.0])
 AB2 = AdamsBashforth([3/2, -1/2])
@@ -28,14 +27,9 @@ AB3 = AdamsBashforth([23/12, -16/12, 5/12])
 AB4 = AdamsBashforth([55/24, -59/24, 37/24, -9/24])
 AB5 = AdamsBashforth([1901/720, -2774/720, 2616/720, -1274/720, 251/720])
 
-BDF1 = BackwardDifferentialFormula([1.0], 1.0)
-BDF2 = BackwardDifferentialFormula([4/3, -1/3], 2/3)
-BDF3 = BackwardDifferentialFormula([18/11, -9/11, 2/11], 6/11)
-BDF4 = BackwardDifferentialFormula([48/25, -36/25, 16/25, -3/25], 12/25)
-BDF5 = BackwardDifferentialFormula([300/137, -300/137, 200/137, -75/137, 12/137], 60/137)
-BDF6 = BackwardDifferentialFormula([360/147, -450/147, 400/147, -225/147, 72/147, -10/147], 60/147)
-
 # Implicit linear multistep methods
+
+IMPLICIT_EULER = ImplicitEulersMethod()
 
 TRAPEZOIDAL_RULE = TrapezoidalRule()
 AM0 = AdamsMoulton([1.0], predictor="AB1")
@@ -43,6 +37,13 @@ AM1 = AdamsMoulton([0.5, 0.5], predictor="AB2")
 AM2 = AdamsMoulton([5/12, 8/12, -1/12], predictor="AB3")
 AM3 = AdamsMoulton([9/24, 19/24, -5/24, 1/24], predictor="AB4")
 AM4 = AdamsMoulton([251/720, 646/720, -264/720, 106/720, -19/720], predictor="AB5")
+
+BDF1 = BackwardDifferentialFormula([1.0], 1.0)
+BDF2 = BackwardDifferentialFormula([4/3, -1/3], 2/3)
+BDF3 = BackwardDifferentialFormula([18/11, -9/11, 2/11], 6/11)
+BDF4 = BackwardDifferentialFormula([48/25, -36/25, 16/25, -3/25], 12/25)
+BDF5 = BackwardDifferentialFormula([300/137, -300/137, 200/137, -75/137, 12/137], 60/137)
+BDF6 = BackwardDifferentialFormula([360/147, -450/147, 400/147, -225/147, 72/147, -10/147], 60/147)
 
 # Fixed-step Runge-Kutta methods
 
@@ -118,7 +119,6 @@ METHODS: dict[str, SolutionMethod] = {
 
 ALIASES: dict[str, list[str]] = {
     "euler": ["explicit_euler"],
-    "implicit_euler": ["implicit"],
     "heun": ["rkh2"],
     "ralston": ["rkr2"],
     "trapezoidal_rule": ["trapezoidal", "trapezoid"],

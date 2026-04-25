@@ -149,8 +149,8 @@ class ODE:
     ) -> tuple[Quiver, Callable[[float, float], tuple[float, float]]]:
         """Draw arrows illustrating the ODE as a vector field.
 
-        Plot the change in `y[xcoord]` on the x-axis (or in `t` if `xcoord=-1`) and
-        similarly for the y-axis. This can be seen as showing the slice centered on `(*origin, t)`,
+        Plot the change in `(*y, t)[xcoord]` on the x-axis and similarly for the y-axis. 
+        This can be seen as showing the slice centered on `(*origin, t)`,
         and extending in the coordinates specified by `xcoord`, `ycoord`.
 
         If scale is set to zero, all arrows have the same length.

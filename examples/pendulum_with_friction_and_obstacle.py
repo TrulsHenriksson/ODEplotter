@@ -34,7 +34,7 @@ class Pendulum(ODE):
         return update_lines
 
     def lines_resetter(self):
-        def reset_lines():
+        def reset_lines(t_start):
             self.pendulum_line.set_xdata([])
             self.pendulum_line.set_ydata([])
             self.trail_line.set_xdata(np.array([]))
