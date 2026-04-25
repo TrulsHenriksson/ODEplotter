@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from itertools import pairwise
 from numba import jit
 
-from typing import overload, Literal, Generator, Sequence
+from typing import overload, Literal, Generator, Sequence, Callable
 from .utils.types import *
 
 
@@ -121,9 +121,14 @@ class DiscreteSolution:
 
     def get_arrays(self, 
         start_index: int | None = None, 
-        end_index: int | None = None, 
+        end_index: int | None = None,
+        *,
         load: bool = True
     ) -> tuple[TimeArray, VectorArray]:
+        """Convenience function to get the `(t, y)` points between given indices.
+        
+        Similar to `DiscreteSolution.__getitem__`, but loads new points as needed.
+        """
         if start_index is None and end_index is None:
             return to_time_array(self.ts), to_vector_array(self.ys, self.dimension)
         if load and end_index is not None:
@@ -137,6 +142,10 @@ class DiscreteSolution:
     def __getitem__(self, idx: slice) -> tuple[TimeArray, VectorArray]:
         ...
     def __getitem__(self, idx: int | slice):
+        """Convenience function to get the `(t, y)` points between given indices, or at a given index.
+        
+        Doesn't load new points.
+        """
         if isinstance(idx, int):
             self.load(idx - len(self.ts))
             return self.ts[idx], self.ys[idx]
@@ -152,7 +161,13 @@ class DiscreteSolution:
         *,
         load: bool = True,
     ) -> tuple[list[TimeArray], list[VectorArray]]:
-        """Get the (ts, ys) arrays between each pair of consecutive t_values."""
+        """Get the `(ts, ys)` arrays between each pair of consecutive t_values.
+        
+        For example, if `self.ts == [0, 1, 2, 3, 4, 5]`, then calling this with `t_intervals = [1, 2, 5]`
+        will return the list of `TimeArray`s `[[1], [2, 3, 4]]` and the corresponding list of `VectorArray`s.
+        Essentially, `[1, 2, 5]` is interpreted as the half-open intervals `[1, 2), [2, 5)` (or as
+        `(1, 2], (2, 5]` if `closed_side = "right"`).
+        """
         if load:
             self.load_until(t_intervals[-1])
         ts_array = to_time_array(self.ts)
@@ -173,13 +188,12 @@ class DiscreteSolution:
         ax: Axes | None = None,
         style: str = "-",
         load: bool = True,
-        xygetter: XYGetter | None = None,
+        projection: Callable[[TimeArray, VectorArray], tuple[np.ndarray, np.ndarray]] | None = None,
         **plot_kwargs,
     ) -> Line2D:
         """Plot two coordinates of the discrete solution.
 
-        Plot y[xcoord] on the x-axis (or t if xcoord = -1) and y[ycoord] on the y-axis
-        (or t if ycoord = -1) for all y-values.
+        Plot `(*y, t)[xcoord]` on the x-axis and `(*y, t)[ycoord]` on the y-axis for all y-values.
         """
         t_start, t_end = to_time(t_start), to_time(t_end)
         if not isinstance(xcoord, int):
@@ -192,29 +206,29 @@ class DiscreteSolution:
         if ax is None:
             ax = plt.gca()
         (ts,), (ys,) = self.get_arrays_between([t_start, t_end], load=load)
-        if xygetter is None:
+        if projection is None:
             point_array = np.column_stack((ys, ts))  # Place ts at the last position
             xaxis = point_array[:, xcoord]
             yaxis = point_array[:, ycoord]
         else:
-            xaxis, yaxis = xygetter(ts, ys)
+            xaxis, yaxis = projection(ts, ys)
         return ax.plot(xaxis, yaxis, style, **plot_kwargs)[0]
 
     def plot_3d(
         self,
         t_start: Time,
         t_end: Time,
-        xyzgetter: XYZGetter,
+        projection: Callable[[TimeArray, VectorArray], tuple[np.ndarray, np.ndarray, np.ndarray]],
         *,
         ax: Axes3D,
         style: str = "-",
         load: bool = True,
         **plot_kwargs,
     ) -> Line3D:
-        """Plot three coordinates of the discrete solution, as gotten from xyzgetter."""
+        """Plot three coordinates of the discrete solution, as gotten from projection."""
         t_start, t_end = to_time(t_start), to_time(t_end)
         (ts,), (ys,) = self.get_arrays_between([t_start, t_end], load=load)
-        xaxis, yaxis, zaxis = xyzgetter(ts, ys)
+        xaxis, yaxis, zaxis = projection(ts, ys)
         return ax.plot(xaxis, yaxis, zaxis, style, **plot_kwargs)[0]  # type: ignore (matplotlib gets it wrong)
 
     def plot_time_steps(self, *, ax: Axes | None = None, style: str = '-', **plot_kwargs) -> Line2D:

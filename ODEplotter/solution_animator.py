@@ -14,7 +14,7 @@ def flattened_once[T](list_of_lists: Iterable[Iterable[T]]) -> list[T]:
     return [val for sublist in list_of_lists for val in sublist]
 
 # Marginally faster than np.concat((array, [value])), much faster than np.append
-def append(array, value):
+def append(array: np.ndarray, value) -> np.ndarray:
     return np.concat((array, (value,)))
 
 
@@ -30,9 +30,9 @@ def cannot_call_after_rendering(method):
 
 class SolutionAnimator:
     solutions: list[DiscreteSolution]
-    update_functions: list[tuple[UpdateFunction, int]]
-    no_solution_update_functions: list[NoSolUpdateFunction]
-    init_functions: list[InitFunction]
+    update_functions: list[tuple[Callable[[TimeArray, VectorArray], tuple[Artist, ...]], int]]
+    no_solution_update_functions: list[Callable[[TimeArray], tuple[Artist, ...]]]
+    init_functions: list[Callable[[Time], tuple[Artist, ...]]]
 
     def __init__(self):
         """An animation object that animates DiscreteSolutions in parallel."""
@@ -45,12 +45,18 @@ class SolutionAnimator:
 
     @overload
     def animate(
-        self, solution: DiscreteSolution, update_function: UpdateFunction, init_function: InitFunction | None = None
+        self,
+        solution: DiscreteSolution,
+        update_function: Callable[[TimeArray, VectorArray], tuple[Artist, ...]],
+        init_function: Callable[[Time], tuple[Artist, ...]] | None = None,
     ): ...
 
     @overload
     def animate(
-        self, solution: None, update_function: NoSolUpdateFunction, init_function: InitFunction | None = None
+        self,
+        solution: None,
+        update_function: Callable[[TimeArray], tuple[Artist, ...]],
+        init_function: Callable[[Time], tuple[Artist, ...]] | None = None,
     ): ...
 
     @cannot_call_after_rendering
@@ -63,12 +69,12 @@ class SolutionAnimator:
         solution : DiscreteSolution, or None
             A solution to take time and vector values from and give to update_function. If `None`, only the time
             is passed to `update_function`.
-        update_function : (TimeArray, VectorArray) or (TimeArray,) -> tuple of Artists
-            Function that takes the times and vectors from an animation frame, updates some Artists (e.g. lines),
-            and returns a tuple of those Artists.
-        init_function : (Time) -> tuple of Artists
-            Function that is called with the start time before the first animation frame, resets some 
-            Artists (e.g. lines), and returns a tuple of those Artists.
+        update_function : (TimeArray, VectorArray) or (TimeArray,) -> tuple of `Artist`s
+            Function that takes the times and vectors from an animation frame, updates some `Artist`s (e.g. lines),
+            and returns a tuple of those `Artist`s.
+        init_function : (Time) -> tuple of `Artist`s
+            Function that is called with the start time before the first animation frame, resets some
+            `Artist`s (e.g. lines), and returns a tuple of those `Artist`s.
         """
         if solution is None:
             self.no_solution_update_functions.append(update_function)
@@ -118,6 +124,8 @@ class SolutionAnimator:
         xcoord: int = -1,
         ycoord: int = 0,
         trail_length: int = 0,
+        skip_last: bool = False,
+        projection: Callable[[TimeArray, VectorArray], tuple[np.ndarray, np.ndarray]] | None = None,
         **line_kwargs
     ):
         """Animate two coordinates of the solution vectors.
@@ -141,7 +149,7 @@ class SolutionAnimator:
         if ax is None:
             ax = plt.gca()
         line = SolutionAnimator.get_line(ax, **line_kwargs)
-        updater = SolutionAnimator.phase_diagram_updater(line, xcoord, ycoord, trail_length)
+        updater = SolutionAnimator.phase_diagram_updater(line, xcoord, ycoord, trail_length, skip_last, projection)
         resetter = SolutionAnimator.line_resetter(line)
         self.animate(sol, updater, resetter)
 
@@ -154,6 +162,8 @@ class SolutionAnimator:
         ycoord: int = 1,
         zcoord: int = 2,
         trail_length: int = 0,
+        skip_last: bool = False,
+        projection: Callable[[TimeArray, VectorArray], tuple[np.ndarray, np.ndarray, np.ndarray]] | None = None,
         **line_kwargs
     ):
         """Animate three coordinates of the solution vectors.
@@ -176,7 +186,7 @@ class SolutionAnimator:
             Keyword arguments forwarded to `SolutionAnimator.get_line_3d`.
         """
         line = SolutionAnimator.get_line_3d(ax, **line_kwargs)
-        updater = SolutionAnimator.phase_diagram_updater_3d(line, xcoord, ycoord, zcoord, trail_length)
+        updater = SolutionAnimator.phase_diagram_updater_3d(line, xcoord, ycoord, zcoord, trail_length, skip_last, projection)
         resetter = SolutionAnimator.line_resetter_3d(line)
         self.animate(sol, updater, resetter)
 
@@ -201,10 +211,10 @@ class SolutionAnimator:
         return infinite_update_function
 
     def __get_interval_steps(
-        self, 
-        t_start: Time, 
-        t_end: Time, 
-        time_step_per_frame: Time, 
+        self,
+        t_start: Time,
+        t_end: Time,
+        time_step_per_frame: Time,
         fps: int,
         pauses: list[tuple[Time, Time]]
     ) -> tuple[int, TimeArray]:
@@ -289,29 +299,29 @@ class SolutionAnimator:
         # init_func takes no arguments and returns all the updated objects from all the init_functions
         def init_function():
             # Get a list of all the objects that each init_function returns
-            updated_objects = flattened_once(init_function(t_start)
-                                             for init_function
-                                             in self.init_functions)
-            return updated_objects
+            updated_artists = flattened_once(init_function(t_start) for init_function in self.init_functions)
+            return updated_artists
         return init_function
 
     @cannot_call_after_rendering
-    def render(self,
-               fig: Figure,
-               t_start: Time,
-               t_end: Time,
-               *,
-               fps: int = 30,
-               speed: float = 1.0,
-               pauses: list[tuple[Time, Time]] = [],
-               load: bool = True,
-               real_time: bool = True,
-               steps_per_frame: int = 1,
-               repeat: bool = True,
-               repeat_delay: int = 2000,
-               blit: bool = False,
-               filename: str | None = None,
-               dpi: int = 150):
+    def render(
+        self,
+        fig: Figure,
+        t_start: Time,
+        t_end: Time,
+        *,
+        fps: int = 30,
+        speed: float = 1.0,
+        pauses: list[tuple[Time, Time]] = [],
+        load: bool = True,
+        real_time: bool = True,
+        steps_per_frame: int = 1,
+        repeat: bool = True,
+        repeat_delay: int = 2000,
+        blit: bool = False,
+        filename: str | None = None,
+        dpi: int = 150,
+    ):
         """Return the finished animation object and save if filename is given.
 
         If `t_end` is finite, all the `update_functions` are called for all
@@ -363,7 +373,7 @@ class SolutionAnimator:
         if t_end <= t_start:
             raise ValueError('t_end must be greater than t_start')
         if not isinstance(steps_per_frame, int):
-            raise TypeError(f'steps_per_frame must be int, not {type(steps_per_frame)}')
+            raise TypeError(f'steps_per_frame must be int, not {type(steps_per_frame).__name__}')
         if steps_per_frame < 1:
             raise ValueError('steps_per_frame must be positive')
         if filename is not None:
@@ -422,7 +432,7 @@ class SolutionAnimator:
             self.__get_infinite_update_function(load=load)(t_steps)
 
     @staticmethod
-    def time_text_updater(text: Text, decimals=2, t_max=np.inf) -> NoSolUpdateFunction:
+    def time_text_updater(text: Text, decimals=2, t_max=np.inf) -> Callable[[TimeArray], tuple[Artist, ...]]:
         """Update function that writes the current time to a text Artist every frame.
 
         If `t_max` is set, it stops updating past `t_max` and only displays that value.
@@ -434,9 +444,9 @@ class SolutionAnimator:
             text.set_text(f'$t = {t:.{decimals}f}$')
             return text,
         return update_time_text
-    
+
     @staticmethod
-    def time_text_resetter(text: Text, decimals=2) -> InitFunction:
+    def time_text_resetter(text: Text, decimals=2) -> Callable[[Time], tuple[Artist, ...]]:
         """Reset the time text to show the initial time."""
         def reset_time_text(t_start: Time) -> tuple[Artist, ...]:
             text.set_text(f'$t = {t_start:.{decimals}f}$')
@@ -444,8 +454,14 @@ class SolutionAnimator:
         return reset_time_text
 
     @staticmethod
-    def phase_diagram_updater(line: Line2D, xcoord=-1, ycoord=0, trail_length=0, skip_last=False,
-                              xygetter: XYGetter | None = None) -> UpdateFunction:
+    def phase_diagram_updater(
+        line: Line2D,
+        xcoord=-1,
+        ycoord=0,
+        trail_length=0,
+        skip_last=False,
+        projection: Callable[[TimeArray, VectorArray], tuple[np.ndarray, np.ndarray]] | None = None
+    ) -> Callable[[TimeArray, VectorArray], tuple[Artist, ...]]:
         """Update function that plots two coordinates of the y vector each frame.
 
         Every frame, a number of new `(t, y)` points are solved for. These points are projected on the
@@ -461,7 +477,7 @@ class SolutionAnimator:
             How many points to keep from the end of the line. Default: all.
         skip_last : bool (default: False)
             Whether to skip using the last `(t, y)` point (which is from linear interpolation).
-        xygetter : (TimeArray, VectorArray) -> (xs, ys) (default: None)
+        projection : (TimeArray, VectorArray) -> (xs, ys) (default: None)
             Optional function to skip using `xcoord, ycoord` and instead use a custom projection.
         """
         def update_phase_diagram(t_steps: TimeArray, y_steps: VectorArray) -> tuple[Artist, ...]:
@@ -470,19 +486,28 @@ class SolutionAnimator:
                 y_steps = y_steps[:-1]
             if len(t_steps) == 0:
                 return ()
-            if xygetter is None:
+            if projection is None:
                 new_xdata = y_steps[:, xcoord] if xcoord != -1 else t_steps
                 new_ydata = y_steps[:, ycoord] if ycoord != -1 else t_steps
             else:
-                new_xdata, new_ydata = xygetter(t_steps, y_steps)
-            line.set_xdata(np.concatenate((line.get_xdata(), new_xdata))[-trail_length:])
-            line.set_ydata(np.concatenate((line.get_ydata(), new_ydata))[-trail_length:])
+                new_xdata, new_ydata = projection(t_steps, y_steps)
+            xdata = np.concatenate((line.get_xdata(), new_xdata))
+            ydata = np.concatenate((line.get_ydata(), new_ydata))
+            line.set_xdata(xdata[-trail_length:] if trail_length else xdata)
+            line.set_ydata(ydata[-trail_length:] if trail_length else ydata)
             return line,
         return update_phase_diagram
 
     @staticmethod
-    def phase_diagram_updater_3d(line: Line3D, xcoord=0, ycoord=1, zcoord=2, trail_length=0, skip_last=False,
-                                 xyzgetter: XYZGetter | None = None) -> UpdateFunction:
+    def phase_diagram_updater_3d(
+        line: Line3D,
+        xcoord=0,
+        ycoord=1,
+        zcoord=2,
+        trail_length=0,
+        skip_last=False,
+        projection: Callable[[TimeArray, VectorArray], tuple[np.ndarray, np.ndarray, np.ndarray]] | None = None,
+    ) -> Callable[[TimeArray, VectorArray], tuple[Artist, ...]]:
         """Update function that plots three coordinates of the y vector each frame.
 
         Every frame, a number of new `(t, y)` points are solved for. These points are projected on the
@@ -499,7 +524,7 @@ class SolutionAnimator:
             How many points to keep from the end of the line. Default: all.
         skip_last : bool (default: False)
             Whether to skip using the last `(t, y)` point (which is from linear interpolation).
-        xyzgetter : (TimeArray, VectorArray) -> (xs, ys, zs) (default: None)
+        projection : (TimeArray, VectorArray) -> (xs, ys, zs) (default: None)
             Optional function to skip using `xcoord, ycoord, zcoord` and instead use a custom projection.
         """
         def update_phase_diagram(t_steps: TimeArray, y_steps: VectorArray) -> tuple[Artist, ...]:
@@ -508,20 +533,23 @@ class SolutionAnimator:
                 y_steps = y_steps[:-1]
             if len(t_steps) == 0:
                 return ()
-            if xyzgetter is None:
+            if projection is None:
                 new_xdata = y_steps[:, xcoord] if xcoord != -1 else t_steps
                 new_ydata = y_steps[:, ycoord] if ycoord != -1 else t_steps
                 new_zdata = y_steps[:, zcoord] if zcoord != -1 else t_steps
             else:
-                new_xdata, new_ydata, new_zdata = xyzgetter(t_steps, y_steps)
+                new_xdata, new_ydata, new_zdata = projection(t_steps, y_steps)
             new_data = np.array((new_xdata, new_ydata, new_zdata))
-            data = np.asarray(line.get_data_3d())
-            line.set_data_3d(np.concatenate((data, new_data), axis=1)[:, -trail_length:])
+            data = np.concatenate((np.asarray(line.get_data_3d()), new_data), axis=1)
+            line.set_data_3d(data[:, -trail_length:] if trail_length else data)
             return line,
         return update_phase_diagram
 
     @staticmethod
-    def scalar_function_updater(line: Line2D, scalar_function: Callable[[TimeArray, VectorArray], tuple[TimeArray, np.ndarray]]) -> UpdateFunction:
+    def scalar_function_updater(
+        line: Line2D,
+        scalar_function: Callable[[TimeArray, VectorArray], tuple[TimeArray, np.ndarray]],
+    ) -> Callable[[TimeArray, VectorArray], tuple[Artist, ...]]:
         """Update function that plots a scalar across the time.
 
         Arguments
@@ -542,7 +570,7 @@ class SolutionAnimator:
         return update_scalar_function
 
     @staticmethod
-    def line_resetter(line: Line2D) -> InitFunction:
+    def line_resetter(line: Line2D) -> Callable[[Time], tuple[Artist, ...]]:
         """Initialization function that resets a Line2D."""
         def init_line(t_start) -> tuple[Artist, ...]:
             line.set_xdata([])
@@ -551,7 +579,7 @@ class SolutionAnimator:
         return init_line
 
     @staticmethod
-    def line_resetter_3d(line: Line3D) -> InitFunction:
+    def line_resetter_3d(line: Line3D) -> Callable[[Time], tuple[Artist, ...]]:
         """Initialization function that resets a Line3D."""
         def init_line(t_start) -> tuple[Artist, ...]:
             line.set_data_3d(np.empty((3, 0)))
@@ -561,10 +589,10 @@ class SolutionAnimator:
     @staticmethod
     def get_time_text(ax: Axes | Axes3D, loc='upper left') -> Text:
         locations = {
-            'upper left': (0.05, 0.95, 'left', 'top'),
-            'lower left': (0.05, 0.05, 'left', 'bottom'),
-            'lower right': (0.95, 0.05, 'right', 'bottom'),
-            'upper right': (0.95, 0.95, 'right', 'top')
+            "upper left": (0.05, 0.95, "left", "top"),
+            "lower left": (0.05, 0.05, "left", "bottom"),
+            "lower right": (0.95, 0.05, "right", "bottom"),
+            "upper right": (0.95, 0.95, "right", "top"),
         }
         x, y, ha, va = locations[loc]
         if isinstance(ax, Axes3D):

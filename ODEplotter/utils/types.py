@@ -20,11 +20,6 @@ __all__ = [
     "DerivativeFunction",
     "WeightArray",
     "WeightMatrix",
-    "UpdateFunction",
-    "NoSolUpdateFunction",
-    "InitFunction",
-    "XYGetter",
-    "XYZGetter",
     "Distance",
     "DistanceArray",
     "to_time",
@@ -64,14 +59,6 @@ type DerivativeFunction = Callable[[Time, Vector], Vector]
 # Types used in method_data.py
 type WeightArray = np.ndarray[tuple[int], np.dtype[np.floating]]
 type WeightMatrix = np.ndarray[tuple[int, int], np.dtype[np.floating]]
-
-# Types used in solution_animator.py
-type UpdateFunction = Callable[[TimeArray, VectorArray], tuple[Artist, ...]]
-type NoSolUpdateFunction = Callable[[TimeArray], tuple[Artist, ...]]
-type InitFunction = Callable[[Time], tuple[Artist, ...]]
-
-type XYGetter = Callable[[TimeArray, VectorArray], tuple[np.ndarray, np.ndarray]]
-type XYZGetter = Callable[[TimeArray, VectorArray], tuple[np.ndarray, np.ndarray, np.ndarray]]
 
 # Types used in obstacle.py
 type Distance = float | np.floating
