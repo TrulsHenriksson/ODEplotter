@@ -50,8 +50,8 @@ type VectorType = np.dtype[np.inexact]
 type Time = float | np.floating
 type TimeArray = np.ndarray[tuple[int], TimeType]
 
-type Vector = np.ndarray[tuple[int], VectorType]
-type VectorArray = np.ndarray[tuple[int, int], VectorType]
+type Vector = np.ndarray[tuple[int, ...], VectorType]
+type VectorArray = np.ndarray[tuple[int, ...], VectorType]
 
 type SolutionPoint = tuple[Time, Vector]
 type DerivativeFunction = Callable[[Time, Vector], Vector]
@@ -111,44 +111,46 @@ def is_time_array(val: Any) -> TypeIs[TimeArray]:
 
 
 def to_vector(val: Any, copy: bool = False) -> Vector:
-    """Cast a value to a `Vector`, which is a one-dimensional array of np.floating-point or complex values.
+    """Cast a value to a `Vector`, which is a (>=1)-dimensional array of np.floating-point or complex values.
 
     The np.dtype is left unchanged if it is already a subdtype of `np.inexact`.
 
     If `copy` is true, the value is copied if necessary.
     """
     try:
-        val_arr = np.atleast_1d(val)
+        val_arr = np.asarray(val)
     except ValueError as e:
-        raise ValueError(f'Could not cast value to array: {val}') from e
+        raise ValueError(f"Could not cast value to array: {val}") from e
+    except TypeError as e:
+        raise TypeError(f"Cannot not cast object of type {type(val).__name__} to VectorArray") from e
     if not isinstance(val, (np.ndarray, list, tuple)) and not np.issubdtype(val_arr.dtype, np.number):
-        raise TypeError(f'Cannot cast {type(val)} to Vector')
+        raise TypeError(f"Cannot cast {type(val)} to Vector")
     if not np.issubdtype(val_arr.dtype, np.inexact):
-        if np.can_cast(val_arr, np.float64, 'safe'):
+        if np.can_cast(val_arr, np.float64, "safe"):
             val_arr = val_arr.astype(np.float64)
         else:
-            raise ValueError(f'Cannot cast np.dtype {val_arr.dtype} to Vector')
-    if val_arr.ndim != 1:
-        raise ValueError(f'Cannot cast a multidimensional object to Vector: {val}')
+            raise ValueError(f"Cannot cast np.dtype {val_arr.dtype} to Vector")
+    if val_arr.ndim < 1:
+        raise ValueError(f"Cannot cast a zero-dimensional object to Vector: {val}")
     if val_arr.size == 0:
-        raise ValueError('Cannot cast a 0-dimensional array to Vector')
+        raise ValueError("Cannot cast a 0-size array to Vector")
     return val_arr.copy() if copy and val is val_arr else val_arr
 
 def is_vector(val: Any) -> TypeIs[Vector]:
     """Return whether `val` is a valid `Vector`.
 
-    Valid `Vector`s are one-dimensional numpy arrays with `np.inexact` np.dtype.
+    Valid `Vector`s are (>=1)-dimensional numpy arrays with `np.inexact` np.dtype.
     """
-    return isinstance(val, np.ndarray) and val.ndim == 1 and np.issubdtype(val.dtype, np.inexact)
+    return isinstance(val, np.ndarray) and val.ndim >= 1 and np.issubdtype(val.dtype, np.inexact)
 
 
-def to_vector_array(val: Any, expected_dimension: int | None = None, copy: bool = False) -> VectorArray:
-    """Cast a value to `VectorArray`, which is a two-dimensional array of np.floating-point or complex values.
+def to_vector_array(val: Any, vector_shape: tuple[int, ...] | None = None, copy: bool = False) -> VectorArray:
+    """Cast a value to `VectorArray`, which is a (>=2)-dimensional array of np.floating-point or complex values.
 
     The np.dtype is left unchanged if it is already a subdtype of `np.inexact`.
 
-    When `expected_dimension` is given, the dimension of the vectors is checked to match. Casting
-    an empty array requires that `expected_dimension` is given.
+    When `vector_shape` is given, the shape of the vectors is checked to match. Casting
+    an empty array requires that `expected_shape` is given.
 
     If `copy` is true, the value is copied if necessary.
     """
@@ -157,6 +159,8 @@ def to_vector_array(val: Any, expected_dimension: int | None = None, copy: bool 
         val_arr = np.asarray(val)
     except ValueError as e:
         raise ValueError(f'Could not cast value to array: {val}') from e
+    except TypeError as e:
+        raise TypeError(f"Cannot not cast object of type {type(val).__name__} to VectorArray") from e
     # Normalize np.dtype
     if not isinstance(val, (np.ndarray, list, tuple)) and not np.issubdtype(val_arr.dtype, np.number):
         raise TypeError(f'Cannot cast {type(val)} to VectorArray')
@@ -166,38 +170,39 @@ def to_vector_array(val: Any, expected_dimension: int | None = None, copy: bool 
         else:
             raise ValueError(f'Cannot cast np.dtype {val_arr.dtype} to VectorArray')
     # Normalize shape
-    match val_arr.shape:
-        case ():
-            raise ValueError(f'Cannot cast a 0-dimensional array to VectorArray')
-        case (0,) | (0, 0) | (1, 0):
-            # If given an empty array, e.g. np.array([[]]) or np.array([]), reshape it to zero vectors of the expected dimension
-            if expected_dimension is None:
-                raise ValueError(f'expected_dimension must be specified for an empty VectorArray')
-            val_arr = val_arr.reshape((0, expected_dimension))
-        case (dim,):
-            if expected_dimension is not None and dim != expected_dimension:
-                raise ValueError(f'The dimension of the vectors is {dim}, expected {expected_dimension}')
-            val_arr = val_arr.reshape((1, dim))
-        case (_, 0):
-            raise ValueError('Cannot cast 0-dimensional Vectors to VectorArray')
-        case (_, dim):
-            if expected_dimension is not None and dim != expected_dimension:
-                raise ValueError(f'The dimension of the vectors is {dim}, expected {expected_dimension}')
-        case _:
-            raise ValueError(f'Cannot cast an array with >2 dimensions to VectorArray')
+    if val_arr.ndim == 0:
+        raise ValueError("Cannot cast a 0-dimensional array to VectorArray")
+    elif val_arr.size == 0:
+        # If given an empty array, e.g. np.array([[]]) or np.array([]), reshape it to zero vectors of the expected dimension
+        if vector_shape is None:
+            raise ValueError(f'expected_shape must be specified for an empty VectorArray')
+        val_arr = val_arr.reshape((0, *vector_shape))
+    elif vector_shape is None:
+        val_arr = np.atleast_2d(val_arr)
+    # Is it a single vector?
+    elif val_arr.ndim == len(vector_shape):
+        if val_arr.shape != vector_shape:
+            raise ValueError(f"The shape of the vectors is {val_arr.shape}, expected {vector_shape}")
+        val_arr = val_arr.reshape((1, *vector_shape))
+    # Is it an array of vectors?
+    elif val_arr.ndim == len(vector_shape) + 1:
+        if val_arr.shape[1:] != vector_shape:
+            raise ValueError(f"The shape of the vectors is {val_arr.shape[1:]}, expected {vector_shape}")
+    else:
+        raise ValueError(f"The shape is {val_arr.shape}, which is not a 1D array of vectors with shape {vector_shape}")
     return val_arr.copy() if copy and val is val_arr else val_arr
 
-def is_vector_array(val: Any, expected_dimension: int | None = None) -> TypeIs[VectorArray]:
+def is_vector_array(val: Any, vector_shape: tuple[int, ...] | None = None) -> TypeIs[VectorArray]:
     """Return whether `val` is a valid `VectorArray`.
 
-    Valid `VectorArray`s are two-dimensional numpy arrays with `np.inexact` np.dtype,
-    with second dimension matching `expected_dimension`, if given.
+    Valid `VectorArray`s are (>=2)-dimensional numpy arrays with `np.inexact` np.dtype,
+    with its `shape[1:]` matching `vector_shape`, if given.
     """
-    if not isinstance(val, np.ndarray) or val.ndim != 2 or not np.issubdtype(val.dtype, np.inexact):
+    if not isinstance(val, np.ndarray) or val.ndim < 2 or not np.issubdtype(val.dtype, np.inexact):
         return False
-    if expected_dimension is None:
-        return val.shape[1] != 0
-    return val.shape[1] == expected_dimension
+    if vector_shape is None:
+        return val.size != 0
+    return val.shape[1:] == vector_shape
 
 
 def to_weight_array(val: Any, copy: bool = False) -> WeightArray:
@@ -229,6 +234,4 @@ def is_weight_array(val: Any) -> TypeIs[WeightArray]:
 
 """
 TODO:
-- Simplify to_vector_array shape logic
-- Disallow nan as Time? Perchance.
 """

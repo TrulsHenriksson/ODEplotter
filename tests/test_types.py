@@ -153,18 +153,20 @@ def test_is_time_array():
         (TypeError, lambda x: x + 1),
         (ValueError, [[[]], []]),
         (ValueError, []),
-        (ValueError, [[9.0]]),
         (ValueError, ["9.0"]),
         (ValueError, ("9.0",)),
+        (ValueError, 1.0),
+        (ValueError, 1 + 2j),
+        (ValueError, np.ones((2, 0))),
         (None, np.array([4.0, 1.0, -999.0])),
         (None, range(8)),
         (None, [8, 9]),
         (None, (8, 9)),
-        (None, 1.0),
-        (None, 1 + 2j),
         (None, np.arange(3) + np.ones(3) * 1j),
         (None, np.arange(3, dtype=np.int64)),
         (None, np.arange(3, dtype=np.complex64)),
+        (None, np.ones((1, 1))),
+        (None, np.ones((2, 2, 2, 2))),
     ],
 )
 def test_to_vector_exceptions(value, error):
@@ -211,8 +213,9 @@ def test_to_vector_identity(value):
 
 
 def test_is_vector():
-    assert is_vector(to_vector(0.0))
     assert is_vector(to_vector([0.0]))
+    assert is_vector(to_vector([[[0.0]]]))
+    assert is_vector(np.ones((2, 2)))
     assert is_vector(np.array([0.0]))
     assert is_vector(np.array([0.0], dtype=np.float16))
     assert is_vector(np.array([0.0], dtype=np.float32))
@@ -224,7 +227,7 @@ def test_is_vector():
     assert not is_vector([0.0])
     assert not is_vector(range(1))
     assert not is_vector(np.arange(3, dtype=np.int8))
-    assert not is_vector(np.ones((2, 2)))
+    assert not is_vector(np.array(2.0))
 
 
 @pytest.mark.parametrize(
@@ -237,26 +240,34 @@ def test_is_vector():
         (TypeError, None, "[[1.0]]"),
         (ValueError, None, [[], 0.0]),
         (ValueError, None, [["0.0", "0.1"]]),
-        (ValueError, None, [[[]]]),
-        (ValueError, None, 0.0),
-        (ValueError, None, []),
-        (ValueError, 3, [0.0, 0.1]),
-        (ValueError, 3, [[0.0, 0.1]]),
+        (ValueError, None, [[[]]]),  # 0-size arrays need given dimension
         (ValueError, None, [[]]),
         (ValueError, None, [[], []]),
-        (ValueError, 2, [[], []]),
+        (None, (2, 3), [[[]]]),
+        (None, (2, 3, 4), [[[]]]),
+        (None, (2, 3, 4, 5), [[[]]]),
+        (ValueError, (2, 3), [[[1.0]]]),  # [[1.0]] isn't (2, 3)-shaped
+        (ValueError, None, 0.0),
+        (ValueError, None, []),
+        (ValueError, (1,), [0.0, 0.1]),  # [0.0, 0.1] is interpreted as a vector, which does not have shape (1,)
+        (ValueError, (3,), [[0.0, 0.1]]),
         (None, None, [[0.1]]),
-        (None, 1, [[0.1]]),
-        (None, None, [0]),
+        (None, (1,), [[0.1]]),
+        (None, None, [0]),  # Just make it 2D if nothing can be known about it
+        (None, None, [0.0, 0.1]),
         (None, None, np.array([[1]], dtype=np.int8)),
         (None, None, np.array([[1]], dtype=np.complex64)),
         (None, None, [[True, False]]),
-        (None, 2, []),
-        (None, 2, [[]]),
-        (None, 2, np.empty((0,))),
-        (None, 2, np.empty((0, 0))),
-        (None, 2, np.empty((0, 2))),
-        (None, 2, np.empty((1, 0))),
+        (None, (2,), []),
+        (None, (2,), [[]]),
+        (None, (2,), [[], []]),  # 0-size arrays can be reshaped to anything
+        (None, (2,), np.empty((0,))),
+        (None, (2,), np.empty((0, 0))),
+        (None, (2,), np.empty((0, 2))),
+        (None, (2,), np.empty((1, 0))),
+        (None, (2, 3), np.empty((1, 0, 0, 0))),
+        (None, (2, 3), np.empty((5, 2, 3))),
+        (None, (2, 3, 4), np.empty((5, 2, 3, 4))),
     ],
 )
 def test_to_vector_array_exceptions(error, dimension, value):
@@ -279,13 +290,16 @@ def test_to_vector_array_exceptions(error, dimension, value):
         (None, np.arange(3), v),
         (None, v := to_vector_array([[0 + 1j, 1 + 1j, 2 + 1j]]), v),
         (None, np.arange(3) + np.ones(3) * 1j, v),
-        (2, [], np.empty((0, 2), dtype=np.float64)),
-        (2, [[]], np.empty((0, 2), dtype=np.float64)),
-        (2, np.array([]), np.empty((0, 2), dtype=np.float64)),
-        (2, np.empty((0,)), np.empty((0, 2), dtype=np.float64)),
-        (2, np.empty((0, 0)), np.empty((0, 2), dtype=np.float64)),
-        (2, np.empty((1, 0)), np.empty((0, 2), dtype=np.float64)),
-        (2, np.empty((0, 2)), np.empty((0, 2), dtype=np.float64)),
+        ((2,), [], np.zeros((0, 2), dtype=np.float64)),
+        ((2,), [[]], np.zeros((0, 2), dtype=np.float64)),
+        ((2,), np.array([]), np.zeros((0, 2), dtype=np.float64)),
+        ((2,), np.zeros((0,)), np.zeros((0, 2), dtype=np.float64)),
+        ((2,), np.zeros((0, 0)), np.zeros((0, 2), dtype=np.float64)),
+        ((2,), np.zeros((1, 0)), np.zeros((0, 2), dtype=np.float64)),
+        ((2,), np.zeros((0, 2)), np.zeros((0, 2), dtype=np.float64)),
+        ((2, 3, 4), np.zeros((0, 0)), np.zeros((0, 2, 3, 4))),
+        ((2, 3, 4), np.zeros((2, 3, 4)), np.zeros((1, 2, 3, 4))),
+        ((2, 3, 4), np.zeros((1, 2, 3, 4)), np.zeros((1, 2, 3, 4))),
     ],
 )
 def test_to_vector_array_equality(value, dimension, expected):
@@ -294,24 +308,24 @@ def test_to_vector_array_equality(value, dimension, expected):
     assert np.array_equal(array, expected)
 
 
-@pytest.mark.parametrize("dimension", [None, 2])
+@pytest.mark.parametrize("vector_shape", [None, (2,)])
 @pytest.mark.parametrize(
     "value",
     [
         np.array([[1.0, 2.0]]),
-        np.empty((0, 2), dtype=np.float16),
-        np.empty((0, 2), dtype=np.float32),
-        np.empty((0, 2), dtype=np.float64),
-        np.empty((0, 2), dtype=np.complex64),
-        np.empty((0, 2), dtype=np.complex128),
+        np.empty((1, 2), dtype=np.float16),
+        np.empty((1, 2), dtype=np.float32),
+        np.empty((1, 2), dtype=np.float64),
+        np.empty((1, 2), dtype=np.complex64),
+        np.empty((1, 2), dtype=np.complex128),
         np.ones((3, 2), dtype=np.float64),
         np.ones((3, 2), dtype=np.complex128),
     ],
 )
-def test_to_vector_array_identity(value, dimension):
-    assert to_vector_array(value, dimension, copy=False) is value
-    assert to_vector_array(value, dimension, copy=True) is not value
-    assert to_vector_array(value, dimension) is value  # Doesn't copy by default
+def test_to_vector_array_identity(value, vector_shape):
+    assert to_vector_array(value, vector_shape, copy=False) is value
+    assert to_vector_array(value, vector_shape, copy=True) is not value
+    assert to_vector_array(value, vector_shape) is value  # Doesn't copy by default
 
 
 def test_is_vector_array():
@@ -319,16 +333,18 @@ def test_is_vector_array():
     assert not is_vector_array([])
     assert not is_vector_array(np.array(0.0))
     assert not is_vector_array(np.array([0.0]))
-    assert not is_vector_array(np.array([[]]), None)
-    assert not is_vector_array(np.empty((0,)))
-    assert not is_vector_array(np.empty((0, 0)))
-    assert not is_vector_array(np.empty((1, 0)))
-    assert not is_vector_array(np.empty((2, 0)))
-    assert not is_vector_array(np.ones((2, 3)), 2)
+    assert not is_vector_array(np.array([[]]))
+    assert not is_vector_array(np.zeros((0,)))
+    assert not is_vector_array(np.zeros((0, 0)))
+    assert not is_vector_array(np.zeros((1, 0)))
+    assert not is_vector_array(np.zeros((2, 0)))
+    assert not is_vector_array(np.ones((2, 3)), (2,))
+    assert not is_vector_array(np.ones((2, 3, 3, 4)), (2, 3, 4))
     assert not is_vector_array(np.array([[True, False]]))
     assert not is_vector_array(np.array([["abc", "def"]]))
     assert not is_vector_array(np.array([[1, 0]]))
-    assert is_vector_array(np.ones((3, 2)), 2)
+    assert is_vector_array(np.ones((3, 2)), (2,))
+    assert is_vector_array(np.ones((3, 2, 3, 4)), (2, 3, 4))
+    assert is_vector_array(np.ones((3, 2, 3, 4)), None)
     assert is_vector_array(np.ones((3, 2)), None)
-    assert is_vector_array(np.empty((0, 2)), 2)
-    assert is_vector_array(np.empty((0, 2)), None)
+    assert is_vector_array(np.zeros((0, 2)), (2,))
