@@ -27,6 +27,7 @@ def interp_nd(x: TimeArray, xp: TimeArray, fp: VectorArray) -> VectorArray:
 
 
 def pack(index: int | tuple[int, ...]) -> tuple[int, ...]:
+    """Pack an array index to be able to unpack it."""
     return index if isinstance(index, tuple) else (index,)
 
 
@@ -38,7 +39,7 @@ class DiscreteSolution:
     y0: Vector
     y_shape: tuple[int, ...]
 
-    def __init__(self, point_gen: Generator[SolutionPoint], method_name: str = ""):
+    def __init__(self, point_gen: Generator[SolutionPoint]):
         """Create a lazy discrete solution from a `SolutionPoint` generator.
 
         A true solution to an initial value problem is a vector function `y(t)` where
@@ -54,7 +55,6 @@ class DiscreteSolution:
             Infinite iterator that returns (Time, Vector) pairs.
         """
         self.point_gen = point_gen
-        self.method_name = method_name
         # Lists! Only converted to numpy arrays when needed since those are immutable.
         self.ts: list[Time] = []
         self.ys: list[Vector] = []
@@ -206,7 +206,7 @@ class DiscreteSolution:
 
         if xaxis.ndim != 1 or yaxis.ndim != 1:
             if projection is None:
-                raise ValueError(f"The given coordinates do not index a single element in an array with shape {self.y0.shape}")
+                raise ValueError(f"The given coordinates do not index a single element in an array with shape {self.y_shape}")
             raise ValueError("The projection did not return two one-dimensional arrays")
         return ax.plot(xaxis, yaxis, style, **plot_kwargs)[0]
 
@@ -236,7 +236,7 @@ class DiscreteSolution:
 
         if xaxis.ndim != 1 or yaxis.ndim != 1 or zaxis.ndim != 1:
             if projection is None:
-                raise ValueError(f"The given coordinates do not index a single element in an array with shape {self.y0.shape}")
+                raise ValueError(f"The given coordinates do not index a single element in an array with shape {self.y_shape}")
             raise ValueError("The projection did not return three one-dimensional arrays")
         return ax.plot(xaxis, yaxis, zaxis, style, **plot_kwargs)[0]  # type: ignore (matplotlib gets it wrong)
 

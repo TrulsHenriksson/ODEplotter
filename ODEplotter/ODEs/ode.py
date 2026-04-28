@@ -90,7 +90,7 @@ class ODE:
             point_gen = self.__obstacle_solver(restarter, t0, y0)
         else:
             point_gen = restarter(t0, y0)
-        return DiscreteSolution(point_gen, method_name)
+        return DiscreteSolution(point_gen)
 
     def __get_restarter(self, method_name: str, *args, use_jit: bool = False, **kwargs):
         method = METHODS[method_name.lower()]
@@ -207,7 +207,5 @@ class ODE:
 
 """
 TODO:
-+ Move JitODE to its own file
-+ Make all jitting lazy, or even precompiled? Investigate.
 - Move to using faster root-finding methods for implicit methods, maybe scipy.optimize
 """
