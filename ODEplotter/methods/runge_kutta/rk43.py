@@ -6,6 +6,7 @@ from typing import Generator, Callable, Literal
 from ...utils.types import *
 from ...utils.exceptions import StepSizeTooSmallError
 
+from ..solution_method import weighted_sum
 from .adaptive_runge_kutta_PI import AdaptiveRungeKuttaPI
 from ..method_data import RK43_NODES, RK43_MATRIX, RK43_WEIGHTS, RK43_ERROR
 
@@ -23,7 +24,7 @@ def runge_kutta_43(
     norm: Callable[[Vector], float],
 ) -> Generator[SolutionPoint]:
     # Array of past derivatives
-    derivatives = np.zeros((5, len(y)), dtype=y.dtype)
+    derivatives = np.zeros((5, *y.shape), dtype=y.dtype)
 
     error = tol
     error_exponent = 2 / 12
@@ -46,7 +47,7 @@ def runge_kutta_43(
             derivatives[3] = derivative(t + h, y + h * (-derivatives[0] + 2 * derivatives[1]))
             derivatives[4] = derivative(t + h, y + h * derivatives[2])
 
-            error_vector = error_weights.dot(derivatives)
+            error_vector = weighted_sum(derivatives, error_weights)
             error = max(h * norm(error_vector), MACHINE_EPS)
             # Update the step size (0.9 as a safety factor)
             h *= min(max(0.9 * (tol / error)**error_exponent * (tol / last_error)**last_error_exponent, 0.3), 2)
@@ -56,7 +57,7 @@ def runge_kutta_43(
                 raise StepSizeTooSmallError(f"Adaptive time step got too small (<{min_h}) at t = {t}")
 
         t += h
-        y += h * weights.dot(derivatives)
+        y += h * weighted_sum(derivatives, weights)
 
 
 class RungeKutta43(AdaptiveRungeKuttaPI):

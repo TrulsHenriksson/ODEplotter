@@ -4,7 +4,7 @@ import numpy as np
 from typing import Generator
 from ...utils.types import *
 
-from ..solution_method import SolutionMethod
+from ..solution_method import SolutionMethod, weighted_sum
 
 
 
@@ -18,17 +18,17 @@ def runge_kutta(
     weights: WeightArray,
     matrix: WeightMatrix,
 ) -> Generator[SolutionPoint]:
-    derivatives = np.zeros((stages, len(y)), dtype=y.dtype)
+    derivatives = np.zeros((stages, *y.shape), dtype=y.dtype)
     while True:
         yield t, y.copy()
         derivatives[0] = derivative(t, y)
         for i in range(1, stages):
             derivatives[i] = derivative(
                 t + h * nodes[i],
-                y + h * matrix[i, :i].dot(derivatives[:i]),
+                y + h * weighted_sum(derivatives[:i], matrix[i, :i]),
             )
         t += h
-        y += h * weights.dot(derivatives)
+        y += h * weighted_sum(derivatives, weights)
 
 
 class RungeKutta(SolutionMethod):

@@ -74,7 +74,7 @@ def test_simple_ode_solution(method_name: str, simple_derivative, use_jit: bool 
         return
 
     t0 = 0.0
-    y0 = np.array([1.0, 2.0])
+    y0 = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
     h = 1.0
 
     if isinstance(method, AdaptiveRungeKutta):

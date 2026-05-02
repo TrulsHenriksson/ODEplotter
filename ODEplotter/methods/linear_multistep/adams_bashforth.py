@@ -4,7 +4,7 @@ import numpy as np
 from typing import Generator
 from ...utils.types import *
 
-from ..solution_method import SolutionMethod
+from ..solution_method import SolutionMethod, weighted_sum
 
 
 def adams_bashforth(
@@ -18,7 +18,7 @@ def adams_bashforth(
     while True:
         yield t, y.copy()
         t += h
-        y += h * weights.dot(derivatives)
+        y += h * weighted_sum(derivatives, weights)
 
         # Move the old diffs back one step and calculate the new one
         derivatives[1:] = derivatives[:-1]

@@ -6,7 +6,7 @@ from typing import Generator
 from ODEplotter.utils.types import DerivativeFunction, Vector
 from ...utils.types import *
 
-from ..solution_method import SolutionMethod
+from ..solution_method import SolutionMethod, weighted_sum
 
 
 def runge_kutta_4(
@@ -15,7 +15,7 @@ def runge_kutta_4(
     y: Vector,
     h: Time,
 ) -> Generator[SolutionPoint]:
-    derivatives = np.zeros((4, len(y)), dtype=y.dtype)
+    derivatives = np.zeros((4, *y.shape), dtype=y.dtype)
     weights = np.array([1.0, 2.0, 2.0, 1.0]) / 6
     half_h = h * 0.5
     while True:
@@ -25,7 +25,7 @@ def runge_kutta_4(
         derivatives[2] = derivative(t + half_h, y + half_h * derivatives[1])
         derivatives[3] = derivative(t + h, y + h * derivatives[2])
         t += h
-        y += h * weights.dot(derivatives)
+        y += h * weighted_sum(derivatives, weights)
 
 
 class RungeKutta4(SolutionMethod):

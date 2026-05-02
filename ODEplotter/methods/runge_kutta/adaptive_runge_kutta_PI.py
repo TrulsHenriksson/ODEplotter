@@ -6,6 +6,7 @@ from typing import Generator, Callable
 from ...utils.types import *
 from ...utils.exceptions import StepSizeTooSmallError
 
+from ..solution_method import weighted_sum
 from .adaptive_runge_kutta import AdaptiveRungeKutta
 
 
@@ -29,7 +30,7 @@ def adaptive_runge_kutta_PI(
     norm: Callable[[Vector], float],
 ) -> Generator[SolutionPoint]:
     # Array of past derivatives
-    derivatives = np.zeros((stages, len(y)), dtype=y.dtype)
+    derivatives = np.zeros((stages, *y.shape), dtype=y.dtype)
 
     error = tol
     error_exponent = 2 / (3 * order)
@@ -51,10 +52,10 @@ def adaptive_runge_kutta_PI(
             for i in range(1, stages):
                 derivatives[i] = derivative(
                     t + h * nodes[i],
-                    y + h * matrix[i, :i].dot(derivatives[:i]),
+                    y + h * weighted_sum(derivatives[:i], matrix[i, :i]),
                 )
 
-            error_vector = error_weights.dot(derivatives)
+            error_vector = weighted_sum(derivatives, error_weights)
             error = max(h * norm(error_vector), MACHINE_EPS)  # max() to not divide by zero
             # Update the step size using a PI controller (0.9 as a safety factor)
             h *= min(max(0.9 * (tol / error)**error_exponent * (tol / last_error)**last_error_exponent, 0.3), 2)
@@ -64,7 +65,7 @@ def adaptive_runge_kutta_PI(
                 raise StepSizeTooSmallError(f"Adaptive time step got too small (<{min_h}) at t = {t}")
 
         t += h
-        y += h * weights.dot(derivatives)
+        y += h * weighted_sum(derivatives, weights)
 
 
 class AdaptiveRungeKuttaPI(AdaptiveRungeKutta):

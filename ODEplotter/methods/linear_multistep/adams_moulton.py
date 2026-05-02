@@ -5,7 +5,7 @@ from ...utils.types import *
 from ...utils.predictors import Predictors
 from ...utils.root_finder import RootFinder
 
-from ..solution_method import SolutionMethod
+from ..solution_method import SolutionMethod, weighted_sum
 
 
 # Non-JIT compilable method (TODO: fix by using a JITed predictor-corrector pair)
@@ -28,14 +28,15 @@ def adams_moulton(
         t += h
 
         # Next y
-        prev_derivatives_average = weights[1:].dot(derivatives[:-1])
+        prev_derivatives_average = weighted_sum(derivatives[:-1], weights[1:])
         def deficit(next_y: Vector) -> Vector:
+            next_y = next_y.reshape(y.shape)
             first_derivative = derivative(t, next_y)
-            return next_y - y - h * (first_weight * first_derivative + prev_derivatives_average)
+            return (next_y - y - h * (first_weight * first_derivative + prev_derivatives_average)).ravel()
 
         # Find the next y value that makes the deficit function zero
         next_y_guess = predictor(h, y, derivatives)
-        y = corrector(deficit, next_y_guess)
+        y = corrector(deficit, next_y_guess.ravel()).reshape(y.shape)
 
         # Move the old diffs back one step and calculate the new one
         derivatives[1:] = derivatives[:-1]

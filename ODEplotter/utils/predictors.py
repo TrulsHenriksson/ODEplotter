@@ -13,7 +13,7 @@ class Predictors:
     @staticmethod
     def adams_bashforth(weights: WeightArray) -> PredictorMethod:
         def method(h: Time, y: Vector, diffs: VectorArray) -> Vector:
-            return y + h * weights.dot(diffs)
+            return y + h * (diffs.T.dot(weights)).T
         return method
 
     last: PredictorMethod = lambda h, y, diffs: y

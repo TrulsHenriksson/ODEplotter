@@ -4,7 +4,7 @@ from typing import Callable, Generator
 from ...utils.types import *
 from ...utils.root_finder import RootFinder
 
-from ..solution_method import SolutionMethod
+from ..solution_method import SolutionMethod, weighted_sum
 
 
 def backward_differential_formula(
@@ -18,7 +18,7 @@ def backward_differential_formula(
 ) -> Generator[SolutionPoint]:
     # Start by assuming that the previous y values came from a constant derivative
     first_derivative = derivative(t, y)
-    previous_ys = to_vector_array(y - h * first_derivative * np.arange(len(y_weights))[:, None])
+    previous_ys = to_vector_array([y - i * h * first_derivative for i in range(len(y_weights))], y.shape)
     while True:
         yield t, y.copy()
 
@@ -26,12 +26,13 @@ def backward_differential_formula(
         t += h
 
         # Next y
-        previous_ys_average = y_weights.dot(previous_ys)
+        previous_ys_average = weighted_sum(previous_ys, y_weights)
         def deficit(next_y: Vector) -> Vector:
-            return next_y - (previous_ys_average + derivative_weight * h * derivative(t, next_y))
+            next_y = next_y.reshape(y.shape)
+            return (next_y - (previous_ys_average + derivative_weight * h * derivative(t, next_y))).ravel()
 
         # Calculate the next y value by solving for deficit == 0
-        y = corrector(deficit, y)
+        y = corrector(deficit, y.ravel()).reshape(y.shape)
 
         # Add the new y and move the rest backward one step
         previous_ys[1:] = previous_ys[:-1]

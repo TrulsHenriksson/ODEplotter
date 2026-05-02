@@ -6,6 +6,7 @@ from typing import Generator, Callable, Literal
 from ...utils.types import *
 from ...utils.exceptions import StepSizeTooSmallError
 
+from ..solution_method import weighted_sum
 from .runge_kutta import RungeKutta
 
 
@@ -16,6 +17,7 @@ def one_norm(vec: Vector) -> float:
     return float(np.abs(vec).sum())
 
 def two_norm(vec: Vector) -> float:
+    vec = vec.ravel()
     return sqrt(vec.dot(vec.conj()).real)
 
 def max_norm(vec: Vector) -> float:
@@ -40,7 +42,7 @@ def adaptive_runge_kutta(
     # step_size_factor: Callable[..., float],
 ) -> Generator[SolutionPoint]:
     # Array of past derivatives
-    derivatives = np.zeros((stages, len(y)), dtype=y.dtype)
+    derivatives = np.zeros((stages, *y.shape), dtype=y.dtype)
 
     error_exponent = 1 / (order + 1)
 
@@ -59,10 +61,10 @@ def adaptive_runge_kutta(
             for i in range(1, stages):
                 derivatives[i] = derivative(
                     t + h * nodes[i],
-                    y + h * matrix[i, :i].dot(derivatives[:i]),
+                    y + h * weighted_sum(derivatives[:i], matrix[i, :i]),
                 )
 
-            error_vector = error_weights.dot(derivatives)
+            error_vector = weighted_sum(derivatives, error_weights)
             error = max(h * norm(error_vector), MACHINE_EPS)
             # Update the step size (0.9 as a safety factor)
             h *= min(max(0.9 * (tol / error) ** error_exponent, 0.3), 2)  # max() to not divide by zero
@@ -72,7 +74,7 @@ def adaptive_runge_kutta(
                 raise StepSizeTooSmallError(f"Adaptive time step got too small (<{min_h}) at t = {t}")
 
         t += h
-        y += h * weights.dot(derivatives)
+        y += h * weighted_sum(derivatives, weights)
 
 
 class AdaptiveRungeKutta(RungeKutta):
