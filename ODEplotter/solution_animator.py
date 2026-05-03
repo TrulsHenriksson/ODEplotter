@@ -7,7 +7,7 @@ from functools import wraps
 from typing import overload, Iterable, Callable
 from .utils.types import *
 
-from .discrete_solution import DiscreteSolution
+from .discrete_solution import DiscreteSolution, pack
 
 
 def flattened_once[T](list_of_lists: Iterable[Iterable[T]]) -> list[T]:
@@ -121,8 +121,8 @@ class SolutionAnimator:
         self,
         sol: DiscreteSolution,
         ax: Axes | None = None,
-        xcoord: int = -1,
-        ycoord: int = 0,
+        xcoord: int | tuple[int, ...] = -1,
+        ycoord: int | tuple[int, ...] = 0,
         trail_length: int = 0,
         skip_last: bool = False,
         projection: Callable[[TimeArray, VectorArray], tuple[np.ndarray, np.ndarray]] | None = None,
@@ -131,7 +131,8 @@ class SolutionAnimator:
         """Animate two coordinates of the solution vectors.
 
         Every frame, a number of new `(t, y)` points are solved for. These points are projected on the
-        x- and y-axis by plotting `(*y, t)[xcoord]` on the x-axis and `(*y, t)[ycoord]` on the y-axis.
+        x- and y-axis by plotting `y[xcoord]` on the x-axis and `y[ycoord]` on the y-axis. A coordinate
+        of `-1` plots the time on that axis instead.
 
         Arguments
         ---------
@@ -140,7 +141,8 @@ class SolutionAnimator:
         ax : Axes
             Which axes to animate on. Defaults to `plt.gca()`.
         xcoord, ycoord : int (default: -1, 0)
-            Which index of the phase vector `(*y, t)` to plot on the x- and y-axis. The default represents plotting `y[0]` against `t`.
+            Which index of the state vector `y` to plot on the x- and y-axis. The default represents
+            plotting `y[0]` against `t`.
         trail_length : int (default: 0)
             How many points to keep from the end of the line. Default: all.
         **line_kwargs
@@ -158,9 +160,9 @@ class SolutionAnimator:
         self,
         sol: DiscreteSolution,
         ax: Axes3D,
-        xcoord: int = 0,
-        ycoord: int = 1,
-        zcoord: int = 2,
+        xcoord: int | tuple[int, ...] = 0,
+        ycoord: int | tuple[int, ...] = 1,
+        zcoord: int | tuple[int, ...] = 2,
         trail_length: int = 0,
         skip_last: bool = False,
         projection: Callable[[TimeArray, VectorArray], tuple[np.ndarray, np.ndarray, np.ndarray]] | None = None,
@@ -169,7 +171,8 @@ class SolutionAnimator:
         """Animate three coordinates of the solution vectors.
 
         Every frame, a number of new `(t, y)` points are solved for. These points are projected on the
-        x-, y-, and z-axis by plotting `(*y, t)[xcoord]` on the x-axis and likewise for the y- and z-axis.
+        x-, y-, and z-axis by plotting `y[xcoord]` on the x-axis and likewise for the y- and z-axis.
+        A coordinate of `-1` plots the time on that axis instead.
 
         Arguments
         ---------
@@ -178,7 +181,7 @@ class SolutionAnimator:
         ax : Axes3D
             Which axes to animate on.
         xcoord, ycoord, zcoord : int (default: 0, 1, 2)
-            Which index of the phase vector `(*y, t)` to plot on the x-, y-, and z-axis. The default
+            Which index of the state vector `y` to plot on the x-, y-, and z-axis. The default
             represents plotting the first three coordinates of `y` as x, y, z.
         trail_length : int (default: 0)
             How many points to keep from the end of the line. Default: all.
@@ -242,7 +245,7 @@ class SolutionAnimator:
         solution_ys = tuple(solution_points[1] for solution_points in all_solution_points)
         paused_indices = np.diff(t_intervals) < 1e-15
         interval_end_ts: TimeArray = t_intervals[1:]
-        interval_end_ys = np.array([sol(interval_end_ts, load=load) for sol in self.solutions])
+        interval_end_ys = [sol(interval_end_ts, load=load) for sol in self.solutions]
         def interval_update_function(interval_index: int) -> list[Artist]:
             if paused_indices[interval_index]:
                 return []
@@ -252,7 +255,7 @@ class SolutionAnimator:
                 updated_artists.extend(
                     update_function(
                         append(solution_ts[solution_index][interval_index], interval_end_ts[interval_index]),
-                        append(solution_ys[solution_index][interval_index], interval_end_ys[solution_index, interval_index])
+                        append(solution_ys[solution_index][interval_index], interval_end_ys[solution_index][interval_index])
                     )
                 )
             for no_solution_update_function in self.no_solution_update_functions:
@@ -431,6 +434,8 @@ class SolutionAnimator:
             t_steps: TimeArray = append(np.linspace(t_start, t_end, num=frames*steps_per_frame), t_end)
             self.__get_infinite_update_function(load=load)(t_steps)
 
+    # Update functions
+
     @staticmethod
     def time_text_updater(text: Text, decimals=2, t_max=np.inf) -> Callable[[TimeArray], tuple[Artist, ...]]:
         """Update function that writes the current time to a text Artist every frame.
@@ -446,21 +451,13 @@ class SolutionAnimator:
         return update_time_text
 
     @staticmethod
-    def time_text_resetter(text: Text, decimals=2) -> Callable[[Time], tuple[Artist, ...]]:
-        """Reset the time text to show the initial time."""
-        def reset_time_text(t_start: Time) -> tuple[Artist, ...]:
-            text.set_text(f'$t = {t_start:.{decimals}f}$')
-            return text,
-        return reset_time_text
-
-    @staticmethod
     def phase_diagram_updater(
         line: Line2D,
-        xcoord=-1,
-        ycoord=0,
-        trail_length=0,
-        skip_last=False,
-        projection: Callable[[TimeArray, VectorArray], tuple[np.ndarray, np.ndarray]] | None = None
+        xcoord: int | tuple[int, ...] = -1,
+        ycoord: int | tuple[int, ...] = 0,
+        trail_length: int = 0,
+        skip_last: bool = False,
+        projection: Callable[[TimeArray, VectorArray], tuple[np.ndarray, np.ndarray]] | None = None,
     ) -> Callable[[TimeArray, VectorArray], tuple[Artist, ...]]:
         """Update function that plots two coordinates of the y vector each frame.
 
@@ -487,8 +484,8 @@ class SolutionAnimator:
             if len(t_steps) == 0:
                 return ()
             if projection is None:
-                new_xdata = y_steps[:, xcoord] if xcoord != -1 else t_steps
-                new_ydata = y_steps[:, ycoord] if ycoord != -1 else t_steps
+                new_xdata = t_steps if xcoord == -1 else y_steps[:, *pack(xcoord)]
+                new_ydata = t_steps if ycoord == -1 else y_steps[:, *pack(ycoord)]
             else:
                 new_xdata, new_ydata = projection(t_steps, y_steps)
             xdata = np.concatenate((line.get_xdata(), new_xdata))
@@ -501,11 +498,11 @@ class SolutionAnimator:
     @staticmethod
     def phase_diagram_updater_3d(
         line: Line3D,
-        xcoord=0,
-        ycoord=1,
-        zcoord=2,
-        trail_length=0,
-        skip_last=False,
+        xcoord: int | tuple[int, ...] = 0,
+        ycoord: int | tuple[int, ...] = 1,
+        zcoord: int | tuple[int, ...] = 2,
+        trail_length: int = 0,
+        skip_last: bool = False,
         projection: Callable[[TimeArray, VectorArray], tuple[np.ndarray, np.ndarray, np.ndarray]] | None = None,
     ) -> Callable[[TimeArray, VectorArray], tuple[Artist, ...]]:
         """Update function that plots three coordinates of the y vector each frame.
@@ -534,9 +531,9 @@ class SolutionAnimator:
             if len(t_steps) == 0:
                 return ()
             if projection is None:
-                new_xdata = y_steps[:, xcoord] if xcoord != -1 else t_steps
-                new_ydata = y_steps[:, ycoord] if ycoord != -1 else t_steps
-                new_zdata = y_steps[:, zcoord] if zcoord != -1 else t_steps
+                new_xdata = t_steps if xcoord == -1 else y_steps[:, *pack(xcoord)]
+                new_ydata = t_steps if ycoord == -1 else y_steps[:, *pack(ycoord)]
+                new_zdata = t_steps if ycoord == -1 else y_steps[:, *pack(zcoord)]
             else:
                 new_xdata, new_ydata, new_zdata = projection(t_steps, y_steps)
             new_data = np.array((new_xdata, new_ydata, new_zdata))
@@ -570,6 +567,41 @@ class SolutionAnimator:
         return update_scalar_function
 
     @staticmethod
+    def rotation_updater_3d(
+        ax: Axes3D,
+        elevation_step: float = 0.0,
+        azimuth_step: float = 0.0,
+        roll_step: float = 0.0,
+    ) -> Callable[[TimeArray], tuple[Artist, ...]]:
+        """Update function that rotates an `Axes3D` object a certain distance per frame.
+
+        Arguments
+        ---------
+        ax : Axes3D
+            Matplotlib axes with a 3D projection.
+        elevation_step, azimuth_step, roll_step : float
+            Angle (in degrees) to step in the given direction per frame.
+        """
+        def update_rotation_3d(ts: TimeArray) -> tuple[Artist, ...]:
+            ax.view_init(
+                ax.elev + elevation_step,
+                ax.azim + azimuth_step,
+                ax.roll + roll_step,
+            )
+            return ()
+        return update_rotation_3d
+
+    # Resetter functions
+
+    @staticmethod
+    def time_text_resetter(text: Text, decimals=2) -> Callable[[Time], tuple[Artist, ...]]:
+        """Reset the time text to show the initial time."""
+        def reset_time_text(t_start: Time) -> tuple[Artist, ...]:
+            text.set_text(f'$t = {t_start:.{decimals}f}$')
+            return text,
+        return reset_time_text
+
+    @staticmethod
     def line_resetter(line: Line2D) -> Callable[[Time], tuple[Artist, ...]]:
         """Initialization function that resets a Line2D."""
         def init_line(t_start) -> tuple[Artist, ...]:
@@ -585,6 +617,20 @@ class SolutionAnimator:
             line.set_data_3d(np.empty((3, 0)))
             return line,
         return init_line
+
+    @staticmethod
+    def rotation_resetter_3d(
+        ax: Axes3D,
+        elevation: float | None = None,
+        azimuth: float | None = None,
+        roll: float | None = None,
+    ) -> Callable[[TimeArray], tuple[Artist, ...]]:
+        def reset_rotation_3d(ts: TimeArray) -> tuple[Artist, ...]:
+            ax.view_init(elevation, azimuth, roll)
+            return ()
+        return reset_rotation_3d
+
+    # Artist getters
 
     @staticmethod
     def get_time_text(ax: Axes | Axes3D, loc='upper left') -> Text:
@@ -612,7 +658,7 @@ class SolutionAnimator:
 
 """
 TODO:
-+ Write docstrings
 - Make infinite animation work with pauses
 - Make infinite animation work with exact solution points
+- Extend API to be able to use different backends
 """

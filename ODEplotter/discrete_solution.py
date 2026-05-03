@@ -13,17 +13,19 @@ def interp_nd(x: TimeArray, xp: TimeArray, fp: VectorArray) -> VectorArray:
     # Using x, xp, fp, just like in np.interp
     if x.size == 0:
         return np.empty((0, *fp.shape[1:]), dtype=fp.dtype)
+
     x_indices = np.searchsorted(xp, x)
     after = np.minimum(x_indices, len(xp) - 1)
     before = np.maximum(x_indices - 1, 0)
+
     numerators = x - xp[before]
     denominators = xp[after] - xp[before]
     denominators[denominators == 0.0] = 1.0  # Set to 1 to not divide by zero
     fractions = numerators / denominators
+
     # Transpose to broadcast against the first axis
-    # TODO: Make more efficient
-    interpolated_fp = (1 - fractions) * np.transpose(fp[before]) + fractions * np.transpose(fp[after])
-    return np.transpose(interpolated_fp)  # type: ignore
+    interpolated_fp = (1 - fractions) * fp[before].T + fractions * fp[after].T
+    return interpolated_fp.T
 
 
 def pack(index: int | tuple[int, ...]) -> tuple[int, ...]:
@@ -180,7 +182,7 @@ class DiscreteSolution:
         self,
         t_start: Time,
         t_end: Time,
-        xcoord: int = -1,
+        xcoord: int | tuple[int, ...] = -1,
         ycoord: int | tuple[int, ...] = 0,
         *,
         ax: Axes | None = None,
@@ -191,7 +193,8 @@ class DiscreteSolution:
     ) -> Line2D:
         """Plot two coordinates of the discrete solution.
 
-        Plot `(*y, t)[xcoord]` on the x-axis and `(*y, t)[ycoord]` on the y-axis for all y-values.
+        Plot `y[xcoord]` on the x-axis and `y[ycoord]` on the y-axis for all y-values.
+        A coordinate of `-1` plots the time on that axis instead.
         """
         if ax is None:
             ax = plt.gca()
