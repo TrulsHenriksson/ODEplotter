@@ -6,9 +6,8 @@ from ..utils.types import *
 from ..utils.exceptions import *
 from ..methods import METHODS
 
-from ..discrete_solution import DiscreteSolution
+from ..discrete_solution import DiscreteSolution, pack
 from ..obstacles import Obstacle
-
 
 
 class ODE:
@@ -52,7 +51,7 @@ class ODE:
             Whether to Just-In-Time compile the derivative and solution methods. This takes
             extra time the first time `ODE.solve` is called, but speeds up subsequent calls
             significantly. Currently unavailable for implicit methods.
-        
+
         **Arguments specific to fixed-step methods:**
 
         h : Time (usually < 0.1)
@@ -106,7 +105,7 @@ class ODE:
         self, restarter: Callable[[Time, Vector], Generator[SolutionPoint]], t0: Time, y0: Vector
     ) -> Generator[SolutionPoint]:
         new_t0, new_y0 = t0, y0
-        
+
         # Keep restarting point_gen when the simulation hits an obstacle
         restart = True
         while restart:
@@ -145,11 +144,19 @@ class ODE:
                 raise StopIteration
 
     def draw_vector_field(
-        self, t: Time, origin: Vector, xcoord=-1, ycoord=0, *, ax: Axes | None = None, density: int = 15, scale: float = 1.0
+        self,
+        t: Time,
+        origin: Vector,
+        xcoord: int | tuple[int, ...] = -1,
+        ycoord: int | tuple[int, ...] = 0,
+        *,
+        ax: Axes | None = None,
+        density: int = 15,
+        scale: float = 1.0,
     ) -> tuple[Quiver, Callable[[float, float], tuple[float, float]]]:
         """Draw arrows illustrating the ODE as a vector field.
 
-        Plot the change in `(*y, t)[xcoord]` on the x-axis and similarly for the y-axis. 
+        Plot the change in `(*y, t)[xcoord]` on the x-axis and similarly for the y-axis.
         This can be seen as showing the slice centered on `(*origin, t)`,
         and extending in the coordinates specified by `xcoord`, `ycoord`.
 
@@ -157,14 +164,18 @@ class ODE:
         """
         if ax is None:
             ax = plt.gca()
+
         arrow_direction = self.__get_arrow_direction_function(xcoord, ycoord, t, origin)
+
         xmin, xmax = ax.get_xlim()
         ymin, ymax = ax.get_ylim()
         xs = np.linspace(xmin, xmax, density)
         ys = np.linspace(ymin, ymax, density)
         xgrid, ygrid = np.meshgrid(xs, ys)
+
         dxs, dys = zip(*[arrow_direction(x, y) for y in ys for x in xs])
         dxs, dys = np.array(dxs), np.array(dys)
+
         if scale == 0.0:
             lengths = np.hypot(dxs, dys)
             lengths[lengths < 1e-15] = 1.0
@@ -173,6 +184,7 @@ class ODE:
             scale = density / min(xmax - xmin, ymax - ymin)
         else:
             scale = 1.0 / scale
+
         quiver = ax.quiver(
             xgrid,
             ygrid,
@@ -184,28 +196,30 @@ class ODE:
             scale=scale,
             scale_units="xy",
         )
+
         return quiver, arrow_direction
 
     def __get_arrow_direction_function(
-        self, xcoord: int, ycoord: int, t: Time, origin: Vector
+        self,
+        xcoord: int | tuple[int, ...],
+        ycoord: int | tuple[int, ...],
+        t: Time,
+        origin: Vector,
     ) -> Callable[[float, float], tuple[float, float]]:
-        # Use origin as a template for the arguments to self.function
-        values = np.concatenate((to_vector(origin), (to_time(t),)))  # type: ignore
-        # Time is last in values
-        TIME_COORD = -1
-        def arrow_direction(plot_x, plot_y):
-            # Take the copy of values and put the plot_x, plot_y values in
-            values[xcoord] = plot_x
-            values[ycoord] = plot_y
-            t = values[TIME_COORD]
-            y = values[:TIME_COORD]
-            change = list(self.derivative(t, y)) + [1.0]  # Time derivative is always 1
-            return float(change[xcoord]), float(change[ycoord])
+        # Copy, since it will be modified in-place
+        origin = to_vector(origin, copy=True)
+        xcoord = pack(xcoord) if xcoord != -1 else xcoord
+        ycoord = pack(ycoord) if ycoord != -1 else ycoord
+
+        def arrow_direction(plot_x: float, plot_y: float) -> tuple[float, float]:
+            if xcoord != -1:
+                origin[*xcoord] = plot_x
+            if ycoord != -1:
+                origin[*ycoord] = plot_y
+
+            local_derivative = self.derivative(t, origin)
+            dx = local_derivative[*xcoord] if xcoord != -1 else 1.0
+            dy = local_derivative[*ycoord] if ycoord != -1 else 1.0
+            return dx, dy
+
         return arrow_direction
-
-
-
-"""
-TODO:
-- Move to using faster root-finding methods for implicit methods, maybe scipy.optimize
-"""

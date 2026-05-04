@@ -13,6 +13,9 @@ from .discrete_solution import DiscreteSolution, pack
 def flattened_once[T](list_of_lists: Iterable[Iterable[T]]) -> list[T]:
     return [val for sublist in list_of_lists for val in sublist]
 
+def chain_repeats[T](values: Iterable[T], repeat_counts: Iterable[int]) -> list[T]:
+    return list(chain.from_iterable(repeat(value, repeat_count) for value, repeat_count in zip(values, repeat_counts)))
+
 # Marginally faster than np.concat((array, [value])), much faster than np.append
 def append(array: np.ndarray, value) -> np.ndarray:
     return np.concat((array, (value,)))
@@ -204,13 +207,16 @@ class SolutionAnimator:
                 (ts,), (ys,) = sol.get_arrays_between(time_span, load=load, closed_side='right')
                 t_steps.append(ts)
                 y_steps.append(ys)
+
             updated_artists = flattened_once(
                 update_function(t_steps[solution_index], y_steps[solution_index])
                 for update_function, solution_index in self.update_functions
             )
             for no_solution_update_function in self.no_solution_update_functions:
                 updated_artists.extend(no_solution_update_function(time_span[-1:]))
+
             return updated_artists
+
         return infinite_update_function
 
     def __get_interval_steps(
@@ -221,17 +227,25 @@ class SolutionAnimator:
         fps: int,
         pauses: list[tuple[Time, Time]]
     ) -> tuple[int, TimeArray]:
-        steps = int((t_end - t_start) // time_step_per_frame)
-        t_intervals = np.concatenate((np.array([t_start]), np.linspace(t_start, t_end, steps+1))) # Make sure first frame is at t_start
+        frames_count = int((t_end - t_start) // time_step_per_frame)
+        # Prepend t_start to make sure the first frame is exactly at t_start
+        t_intervals = np.concatenate((np.array([t_start]), np.linspace(t_start, t_end, frames_count+1)))
         if not len(pauses):
             return len(t_intervals) - 1, t_intervals  # -1 because it counts the number of intervals
-        # At each pause, insert the needed number of frames.
+
+        # Get the index in t_intervals and duration of each pause for the next step
         pause_times, durations = zip(*pauses)
         frames_per_pause = [int(duration * fps) for duration in durations]
-        pause_indices = np.searchsorted(t_intervals, np.array(pause_times))
-        all_pause_indices = list(chain.from_iterable(repeat(index, num_frames) for index, num_frames in zip(pause_indices, frames_per_pause)))
-        all_pause_times = list(chain.from_iterable(repeat(pause_time, num_frames) for pause_time, num_frames in zip(pause_times, frames_per_pause)))
+        pause_indices = np.searchsorted(t_intervals, pause_times)
+
+        # Repeat each pause the required number of frames.
+        # Example: If t_intervals == [0.0, 1.0, ..., 10.0] and pauses=[(1.5, 0.1), (2.2, 0.2)] with fps=10, there should
+        # be a pause for 1 frames (0.1 * fps) at t=1.5 and one for 2 frames at t=2.2, so we should insert
+        # all_pause_times=[1.5, 2.2, 2.2] at indices all_pause_indices=[2, 3, 3].
+        all_pause_indices = chain_repeats(pause_indices, frames_per_pause)
+        all_pause_times = chain_repeats(pause_times, frames_per_pause)
         t_intervals = np.insert(t_intervals, all_pause_indices, all_pause_times)
+
         return len(t_intervals) - 1, t_intervals
 
     def __get_interval_update_function(self, t_intervals: TimeArray, load: bool = True) -> Callable[[int], list[Artist]]:
@@ -243,9 +257,11 @@ class SolutionAnimator:
         all_solution_points = tuple(sol.get_arrays_between(t_intervals, load=load) for sol in self.solutions)
         solution_ts = tuple(solution_points[0] for solution_points in all_solution_points)
         solution_ys = tuple(solution_points[1] for solution_points in all_solution_points)
+
         paused_indices = np.diff(t_intervals) < 1e-15
         interval_end_ts: TimeArray = t_intervals[1:]
         interval_end_ys = [sol(interval_end_ts, load=load) for sol in self.solutions]
+
         def interval_update_function(interval_index: int) -> list[Artist]:
             if paused_indices[interval_index]:
                 return []
@@ -265,6 +281,7 @@ class SolutionAnimator:
                     )
                 )
             return updated_artists
+
         return interval_update_function
 
     def __get_virtual_time_update_function(self, t_start: Time, t_end: Time, steps_per_frame: int = 1, load: bool = True):
@@ -276,6 +293,7 @@ class SolutionAnimator:
         """
         update_function, solution_index = self.update_functions[0]
         solution = self.solutions[solution_index]
+
         if t_end != np.inf:
             if load:
                 solution.load_until(t_end)
@@ -289,7 +307,10 @@ class SolutionAnimator:
         def virtual_time_update_function(frame: int) -> list[Artist]:
             start_index = index_offset + frame * steps_per_frame
             end_index = start_index + steps_per_frame
-            new_ts, new_ys = solution.get_arrays(start_index, min(end_index, max_index) if max_index is not None else end_index, load=load)
+            if max_index is not None:
+                end_index = min(end_index, max_index)
+
+            new_ts, new_ys = solution.get_arrays(start_index, end_index, load=load)
 
             updated_artists = list(update_function(new_ts, new_ys))
             for no_solution_update_function in self.no_solution_update_functions:
@@ -305,6 +326,8 @@ class SolutionAnimator:
             updated_artists = flattened_once(init_function(t_start) for init_function in self.init_functions)
             return updated_artists
         return init_function
+
+    # Rendering functions
 
     @cannot_call_after_rendering
     def render(
@@ -374,16 +397,14 @@ class SolutionAnimator:
         t_start, t_end = to_time(t_start), to_time(t_end)
         # Check for errors
         if t_end <= t_start:
-            raise ValueError('t_end must be greater than t_start')
-        if not isinstance(steps_per_frame, int):
-            raise TypeError(f'steps_per_frame must be int, not {type(steps_per_frame).__name__}')
+            raise ValueError("t_end must be greater than t_start")
         if steps_per_frame < 1:
-            raise ValueError('steps_per_frame must be positive')
+            raise ValueError("steps_per_frame must be positive")
         if filename is not None:
             if t_end == np.inf:
-                raise ValueError('Cannot save gif when t_end=np.inf')
-            if not (filename.endswith('.gif') or filename.endswith('.mp4')):
-                filename = filename + '.gif'
+                raise ValueError("Cannot save gif when t_end=np.inf")
+            if not (filename.endswith(".gif") or filename.endswith(".mp4")):
+                filename = filename + ".gif"
 
         # Get frames and main_update_function
         if real_time:
@@ -397,10 +418,12 @@ class SolutionAnimator:
         else:
             frames, main_update_function = self.__get_virtual_time_update_function(t_start, t_end, steps_per_frame, load)
 
+        main_init_function = self.__get_init_function(t_start)
+
         animation = FuncAnimation(
             fig,
             func=main_update_function,
-            init_func=self.__get_init_function(t_start),
+            init_func=main_init_function,
             frames=frames,
             interval=1000/fps,
             cache_frame_data=(t_end != np.inf),
@@ -414,7 +437,9 @@ class SolutionAnimator:
         self.animation = animation  # Save so it (hopefully) isn't garbage collected
         return animation
 
-    def plot_frame(self, t_start: Time, t_end: Time, *, fps: int | None = None, speed=1.0, steps_per_frame=1, load=True):
+    def plot_frame(
+        self, t_start: Time, t_end: Time, *, fps: int | None = None, speed=1.0, steps_per_frame=1, load=True
+    ):
         """Plot the frame as it looks in the rendered animation at time t.
 
         If fps is not None, it emulates the behaviour of animating with t_end=np.inf. It then
@@ -658,7 +683,7 @@ class SolutionAnimator:
 
 """
 TODO:
+- Remove blitting entirely?
 - Make infinite animation work with pauses
-- Make infinite animation work with exact solution points
 - Extend API to be able to use different backends
 """
