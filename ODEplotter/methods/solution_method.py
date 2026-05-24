@@ -3,12 +3,7 @@ from abc import abstractmethod, ABCMeta
 
 from typing import Callable, Generator, Any
 from ..utils.types import *
-
-
-@jit
-def weighted_sum(vectors: VectorArray, weights: WeightArray) -> Vector:
-    """Dot product along the first axis of `vectors`, equivalent to `vectors.T.dot(weights).T`."""
-    return (vectors.T * weights).sum(axis=-1).T
+from ..utils.weighted_sum import weighted_sum
 
 
 class SolutionMethod(metaclass=ABCMeta):

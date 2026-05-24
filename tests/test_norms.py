@@ -1,26 +1,8 @@
 import pytest
-from contextlib import contextmanager
-
 import numpy as np
-from numba import jit
 
-from ODEplotter.methods.runge_kutta.adaptive_runge_kutta import one_norm, two_norm, max_norm
+from ODEplotter.utils.norms import one_norm, two_norm, max_norm, jit_one_norm, jit_two_norm, jit_max_norm
 
-
-# Boilerplate from https://gist.github.com/oisinmulvihill/45c14271fad7794a4a52516ecb784e69 (modified)
-@contextmanager
-def not_raises(*expected_exceptions):
-    try:
-        yield
-    except expected_exceptions as error:
-        pytest.fail(f"Raised exception {error} when it should not!")
-    except Exception as error:
-        pytest.fail(f"An unexpected exception {error} raised.")
-
-
-jit_one_norm = jit(one_norm)
-jit_two_norm = jit(two_norm)
-jit_max_norm = jit(max_norm)
 
 
 @pytest.mark.parametrize("norm", [one_norm, jit_one_norm, two_norm, jit_two_norm, max_norm, jit_max_norm])

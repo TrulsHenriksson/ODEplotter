@@ -5,23 +5,13 @@ from math import sqrt, ulp
 from typing import Generator, Callable, Literal
 from ...utils.types import *
 from ...utils.exceptions import StepSizeTooSmallError
+from ...utils.norms import one_norm, two_norm, max_norm, jit_one_norm, jit_two_norm, jit_max_norm
 
 from ..solution_method import weighted_sum
 from .runge_kutta import RungeKutta
 
 
 MACHINE_EPS = ulp(1.0)
-
-
-def one_norm(vec: Vector) -> float:
-    return float(np.abs(vec).sum())
-
-def two_norm(vec: Vector) -> float:
-    vec = vec.ravel()
-    return sqrt(vec.dot(vec.conj()).real)
-
-def max_norm(vec: Vector) -> float:
-    return float(max(np.abs(vec.real).max(), np.abs(vec.imag).max()))
 
 
 def adaptive_runge_kutta(
@@ -81,7 +71,7 @@ class AdaptiveRungeKutta(RungeKutta):
     method = staticmethod(adaptive_runge_kutta)
     compiled_method = staticmethod(jit(adaptive_runge_kutta))
     norms = {"one": one_norm, "two": two_norm, "max": max_norm}
-    jit_norms = {"one": jit(one_norm), "two": jit(two_norm), "max": jit(max_norm)}
+    jit_norms = {"one": jit_one_norm, "two": jit_two_norm, "max": jit_max_norm}
 
     stages: int
     nodes: TimeArray
