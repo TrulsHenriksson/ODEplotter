@@ -1,6 +1,6 @@
 from typing import Generator
 from ...utils.types import *
-from ...utils.root_finder import RootFinder
+from ...utils.root_finder import vector_newton
 
 from ..solution_method import SolutionMethod
 
@@ -22,7 +22,7 @@ def trapezoidal_rule(
         def deficit(next_y: Vector) -> Vector:
             return next_y - y - 0.5 * h * (last_derivative + derivative(t, next_y))
 
-        y = RootFinder.vector(deficit, next_y_guess)
+        y = vector_newton(deficit, next_y_guess)
 
 
 class TrapezoidalRule(SolutionMethod):

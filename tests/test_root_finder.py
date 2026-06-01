@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 
 from ODEplotter import Time, Vector
-from ODEplotter.utils.root_finder import RootFinder
+from ODEplotter.utils.root_finder import scalar_newton, vector_newton
 
 
 @pytest.fixture
@@ -50,20 +50,20 @@ def vector_linear_problem():
 
 def test_scalar(scalar_problem):
     func, a, b, root = scalar_problem
-    approx_root = RootFinder.scalar(func, a, b)
+    approx_root = scalar_newton(func, a, b)
     assert approx_root == pytest.approx(root)
 
 def test_vector(vector_problem):
     func, x0, root = vector_problem
-    approx_root = RootFinder.vector(func, x0)
+    approx_root = vector_newton(func, x0)
     assert approx_root == pytest.approx(root)
 
 def test_scalar_linear(scalar_linear_problem):
     func, a, b, root = scalar_linear_problem
-    approx_root = RootFinder.scalar(func, a, b, max_iterations=1)
+    approx_root = scalar_newton(func, a, b, max_iterations=1)
     assert approx_root == pytest.approx(root)
 
 def test_vector_linear(vector_linear_problem):
     func, x0, root = vector_linear_problem
-    approx_root = RootFinder.vector(func, x0, max_iterations=1)
+    approx_root = vector_newton(func, x0, max_iterations=1)
     assert approx_root == pytest.approx(root)

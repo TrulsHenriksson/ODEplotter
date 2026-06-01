@@ -1,6 +1,6 @@
 from typing import Generator
 from ...utils.types import *
-from ...utils.root_finder import RootFinder
+from ...utils.root_finder import vector_newton
 
 from ..solution_method import SolutionMethod, weighted_sum
 
@@ -26,7 +26,7 @@ def backward_differential_formula(
             return next_y - (previous_ys_average + derivative_weight * h * derivative(t, next_y))
 
         # Find the next y value that makes the deficit function zero
-        y = RootFinder.vector(deficit, y)
+        y = vector_newton(deficit, y)
 
         # Add the new y and move the rest backward one step
         previous_ys[1:] = previous_ys[:-1]

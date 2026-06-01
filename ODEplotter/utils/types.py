@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import Any, Literal, Callable, Generator, TypeIs
+from typing import Any, Callable, TypeIs
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.artist import Artist

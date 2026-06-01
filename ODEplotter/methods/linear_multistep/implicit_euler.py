@@ -1,6 +1,6 @@
 from typing import Generator
 from ...utils.types import *
-from ...utils.root_finder import RootFinder
+from ...utils.root_finder import vector_newton
 
 from ..solution_method import SolutionMethod
 
@@ -22,7 +22,7 @@ def implicit_eulers_method(
         def deficit(next_y: Vector) -> Vector:
             return next_y - y - h * derivative(t, next_y)
 
-        y = RootFinder.vector(deficit, next_y_guess)
+        y = vector_newton(deficit, next_y_guess)
 
 
 class ImplicitEulersMethod(SolutionMethod):

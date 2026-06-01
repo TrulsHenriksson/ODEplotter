@@ -3,7 +3,7 @@ import numpy as np
 from typing import Callable, Generator
 from ...utils.types import *
 from ...utils.predictors import Predictors
-from ...utils.root_finder import RootFinder
+from ...utils.root_finder import vector_newton
 
 from ..solution_method import SolutionMethod, weighted_sum
 
@@ -64,4 +64,4 @@ class AdamsMoulton(SolutionMethod):
         self.validated = True
 
     def _prepare_arguments(self, derivative: DerivativeFunction, t0: Time, y0: Vector, h: Time, use_jit: bool):
-        return (derivative, t0, y0, h, self.weights, self.predictor, RootFinder.vector)
+        return (derivative, t0, y0, h, self.weights, self.predictor, vector_newton)

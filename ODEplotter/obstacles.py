@@ -5,7 +5,7 @@ from typing import overload, Callable
 from .utils.types import *
 from .utils.exceptions import ObstacleStopSolving
 
-from .utils.root_finder import RootFinder
+from .utils.root_finder import scalar_newton
 
 
 def sign(x) -> int:
@@ -101,7 +101,7 @@ class Obstacle:
         # Return the distance at time t between (t1, y1) and (t2, y2)
         distance_from_time: Callable[[Time], Distance] = lambda t: self.distance_function(t, interpolate_y(t))
         # Find the time when the distance equals zero
-        t_hit = RootFinder.scalar(
+        t_hit = scalar_newton(
             distance_from_time, t1, t2, max_iterations=max_iterations, raise_if_exceeded=False, **newton_kwargs
         )
         y_hit = interpolate_y(t_hit)
